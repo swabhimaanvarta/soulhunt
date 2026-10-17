@@ -25,6 +25,7 @@ import {
   X,
   PackagePlus,
   PackageSearch,
+  Calendar,
 } from "lucide-react";
 
 interface UserSession {
@@ -138,6 +139,7 @@ export default function Navbar() {
   const navLinks = [
     { href: "/lost-and-found", label: "Lost & Found", icon: Search },
     { href: "/quests", label: "Quests & Hunts", icon: Compass },
+    { href: "/events", label: "Events", icon: Calendar },
     { href: "/map", label: "Campus Map", icon: MapPin },
     { href: "/squads", label: "Squads", icon: Users },
     { href: "/leaderboard", label: "Leaderboard", icon: Trophy },

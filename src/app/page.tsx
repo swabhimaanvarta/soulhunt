@@ -117,6 +117,14 @@ export default async function HomePage() {
                 <Compass className="w-4 h-4" />
                 Active Quest Board
               </Link>
+
+              <Link
+                href="/events"
+                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-950/40 hover:bg-violet-900/40 text-violet-300 border border-violet-500/40 font-bold text-sm transition-all"
+              >
+                <Sparkles className="w-4 h-4 text-violet-400" />
+                Campus Events & Sprints
+              </Link>
             </div>
           </div>
 

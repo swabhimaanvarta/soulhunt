@@ -59,8 +59,53 @@ export default function InvestigationRoomClient({
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [submittingEvidence, setSubmittingEvidence] = useState(false);
 
-  // Recovery modal
+  // Recovery modal & claiming
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+  const [claimingReward, setClaimingReward] = useState(false);
+  const [claimHandoverCode, setClaimHandoverCode] = useState("");
+  const [claimRecoveryNotes, setClaimRecoveryNotes] = useState("");
+  const [claimPhotoUrl, setClaimPhotoUrl] = useState("");
+  const [claimResult, setClaimResult] = useState<any>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
+
+  const handleClaimRecovery = async (customCode?: string) => {
+    setClaimingReward(true);
+    setClaimError(null);
+    try {
+      const codeToSend = customCode || (claimHandoverCode.trim() ? claimHandoverCode.trim() : undefined);
+      const res = await fetch(`/api/investigations/${investigation._id}/recover`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          handoverCode: codeToSend,
+          recoveryNotes: claimRecoveryNotes.trim() || undefined,
+          photoUrl: claimPhotoUrl || undefined,
+        }),
+      });
+
+      const json = await res.json();
+      if (!json.success) {
+        setClaimError(json.error?.message || "Failed to process recovery claim.");
+        return;
+      }
+
+      if (typeof window !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate([100, 50, 150]);
+      }
+
+      setInvestigation((prev: any) => ({
+        ...prev,
+        status: json.data?.status || "COMPLETED",
+        progressPct: 100,
+      }));
+      setClaimResult(json.data);
+      setShowRecoveryModal(false);
+    } catch (e: any) {
+      setClaimError(e.message || "Failed to process recovery.");
+    } finally {
+      setClaimingReward(false);
+    }
+  };
 
   const currentClue = clues.find((c: any) => c.stageOrder === investigation.currentStage);
 
@@ -514,22 +559,38 @@ export default function InvestigationRoomClient({
             </div>
 
             {/* Final Recovery Button */}
-            {quest.linkedLostItemId ? (
-              <Link
-                href={`/items/${quest.linkedLostItemId._id || quest.linkedLostItemId}`}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs font-mono bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
-              >
-                <Award className="w-4 h-4" />
-                VERIFY RECOVERY & HANDOVER
-                <ArrowUpRight className="w-4 h-4" />
-              </Link>
+            {investigation.status === "COMPLETED" ? (
+              <div className="w-full py-3.5 px-4 rounded-xl font-bold text-xs font-mono bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-center flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>INVESTIGATION COMPLETED & CREDITED</span>
+              </div>
+            ) : quest.linkedLostItemId ? (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRecoveryModal(true)}
+                  className="w-full py-3 px-4 rounded-xl font-bold text-xs font-mono bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  <Award className="w-4 h-4" />
+                  VERIFY RECOVERY & HANDOVER
+                  <ArrowUpRight className="w-4 h-4" />
+                </button>
+                <Link
+                  href={`/items/${quest.linkedLostItemId._id || quest.linkedLostItemId}`}
+                  className="block text-center text-[11px] font-mono text-cyan-400 hover:text-cyan-300"
+                >
+                  View item custody ticket →
+                </Link>
+              </div>
             ) : (
               <button
-                onClick={() => alert("Campus treasure hunt verified! Rewards credited to your ledger.")}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs font-mono bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => handleClaimRecovery()}
+                disabled={claimingReward || (investigation.status !== "READY_FOR_RECOVERY" && investigation.progressPct < 90)}
+                className="w-full py-3 px-4 rounded-xl font-bold text-xs font-mono bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <Award className="w-4 h-4" />
-                CLAIM TREASURE REWARD
+                {claimingReward ? "Verifying with Campus Ledger..." : "CLAIM TREASURE REWARD"}
                 <ArrowUpRight className="w-4 h-4" />
               </button>
             )}
@@ -649,6 +710,134 @@ export default function InvestigationRoomClient({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Recovery Submission Modal */}
+      {showRecoveryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="rounded-2xl bg-slate-900 border border-emerald-500/30 p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Award className="w-5 h-5 text-emerald-400" />
+              Verify Item Recovery & Safe Handover
+            </h3>
+
+            <p className="text-xs text-slate-400 leading-relaxed font-mono">
+              Provide the 6-digit physical handover code from the verified owner or Safe-Desk staff, or attach photo evidence for administrative review.
+            </p>
+
+            {claimError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-mono flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                <span>{claimError}</span>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-300">
+                  6-Digit Handover Code (Instant Reward Payout)
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  placeholder="e.g. 849201"
+                  value={claimHandoverCode}
+                  onChange={(e) => setClaimHandoverCode(e.target.value.replace(/\D/g, ""))}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-emerald-400 font-mono tracking-widest text-center text-lg font-bold focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-white/10"></div>
+                <span className="flex-shrink mx-3 text-[10px] font-mono uppercase text-slate-500">
+                  Or Submit Evidence for Review
+                </span>
+                <div className="flex-grow border-t border-white/10"></div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-300">Observation / Recovery Notes</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Deposited item with Library Safe-Desk Staff Officer..."
+                  value={claimRecoveryNotes}
+                  onChange={(e) => setClaimRecoveryNotes(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRecoveryModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleClaimRecovery()}
+                  disabled={claimingReward}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-2"
+                >
+                  <Award className="w-4 h-4" />
+                  {claimingReward ? "Submitting..." : "Submit Verification"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Claim Celebration Modal */}
+      {claimResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
+          <div className="rounded-3xl bg-slate-900 border border-emerald-500/40 p-8 max-w-md w-full text-center space-y-6 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-400 to-amber-400" />
+            
+            <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 mx-auto flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
+              <Award className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black text-white tracking-tight">
+                MISSION ACCOMPLISHED!
+              </h3>
+              <p className="text-xs text-slate-300 font-mono leading-relaxed">
+                {claimResult.message || "Your investigation has been verified and recorded to the campus ledger."}
+              </p>
+            </div>
+
+            {claimResult.rewards && (
+              <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-950/80 border border-white/10 font-mono">
+                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="text-[10px] text-emerald-400 uppercase font-bold">XP Earned</div>
+                  <div className="text-lg font-black text-white">+{claimResult.rewards.xp}</div>
+                </div>
+                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <div className="text-[10px] text-amber-400 uppercase font-bold">Coins Awarded</div>
+                  <div className="text-lg font-black text-white">+{claimResult.rewards.coins} 🪙</div>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 pt-2">
+              <Link
+                href="/dashboard"
+                className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all text-center"
+              >
+                Return to Investigator HQ
+              </Link>
+              <button
+                type="button"
+                onClick={() => setClaimResult(null)}
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-all"
+              >
+                Close & Review Board
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -6,7 +6,8 @@ import Link from "next/link";
 import {
   Compass, Star, Coins, Shield, Bell, ChevronRight,
   Search, PackagePlus, Trophy, Users, Clock, Zap,
-  Target, CheckCircle2, AlertTriangle, BookOpen
+  Target, CheckCircle2, AlertTriangle, BookOpen,
+  Sparkles, Radio, Calendar, Flame, ArrowUpRight, Award, MapPin
 } from "lucide-react";
 
 interface UserData {
@@ -46,10 +47,10 @@ interface NotificationData {
 const XP_PER_LEVEL = 500;
 
 const QUICK_ACTIONS = [
-  { icon: PackagePlus, label: "Report Found Item", href: "/lost-and-found/report-found", color: "emerald", desc: "Help someone recover their belongings" },
+  { icon: PackagePlus, label: "Report Found Item", href: "/lost-and-found/report-found", color: "emerald", desc: "Deposit belongings at Safe-Desk" },
   { icon: Search, label: "Browse Quests", href: "/quests", color: "cyan", desc: "Accept an investigation quest" },
-  { icon: Trophy, label: "Leaderboard", href: "/leaderboard", color: "amber", desc: "See top investigators this week" },
-  { icon: Users, label: "My Squad", href: "/squads", color: "violet", desc: "Coordinate with your team" },
+  { icon: Calendar, label: "Campus Events", href: "/events", color: "violet", desc: "Department sprints & festivals" },
+  { icon: Users, label: "My Squad", href: "/squads", color: "amber", desc: "Coordinate with your team" },
 ];
 
 const TRUST_COLORS: Record<string, string> = {
@@ -64,6 +65,9 @@ export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
   const [quests, setQuests] = useState<QuestData[]>([]);
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
+  const [dailyData, setDailyData] = useState<any>(null);
+  const [liveFeed, setLiveFeed] = useState<any[]>([]);
+  const [activeEvent, setActiveEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -74,10 +78,14 @@ export default function DashboardPage() {
       if (!meData.data && !meData.user) { router.replace("/login"); return; }
       setUser(meData.data || meData.user);
 
-      const [questsRes, notifsRes] = await Promise.all([
+      const [questsRes, notifsRes, dailyRes, feedRes, eventsRes] = await Promise.all([
         fetch("/api/quests?status=ACTIVE&limit=4"),
         fetch("/api/notifications?limit=5"),
+        fetch("/api/content/daily"),
+        fetch("/api/content/feed"),
+        fetch("/api/events?active=true"),
       ]);
+
       if (questsRes.ok) {
         const d = await questsRes.json();
         setQuests(d.data || d.quests || []);
@@ -85,6 +93,18 @@ export default function DashboardPage() {
       if (notifsRes.ok) {
         const d = await notifsRes.json();
         setNotifications(d.data?.notifications || d.notifications || []);
+      }
+      if (dailyRes.ok) {
+        const d = await dailyRes.json();
+        if (d.success) setDailyData(d.data);
+      }
+      if (feedRes.ok) {
+        const d = await feedRes.json();
+        if (d.success) setLiveFeed(d.data || []);
+      }
+      if (eventsRes.ok) {
+        const d = await eventsRes.json();
+        if (d.success && d.data?.length > 0) setActiveEvent(d.data[0]);
       }
     } catch { /* network error */ } finally {
       setLoading(false);
@@ -166,6 +186,92 @@ export default function DashboardPage() {
               initial={{ width: 0 }} animate={{ width: `${xpPct}%` }} transition={{ duration: 1, delay: 0.5 }} />
           </div>
         </motion.div>
+
+        {/* Living Campus Engine: Daily Mystery Spotlight */}
+        {dailyData?.quest && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="relative rounded-2xl overflow-hidden border border-amber-500/30 bg-gradient-to-r from-amber-950/40 via-slate-900/90 to-emerald-950/30 p-6 shadow-xl"
+          >
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 animate-pulse">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    TODAY'S DAILY MYSTERY
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">
+                    Rotates daily at 00:00 UTC
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-white tracking-tight">
+                  {dailyData.quest.title}
+                </h3>
+                <p className="text-xs text-slate-300 font-mono max-w-2xl leading-relaxed">
+                  {dailyData.quest.description}
+                </p>
+                <div className="flex items-center gap-4 text-xs font-mono pt-1 text-slate-400">
+                  <span className="flex items-center gap-1 text-emerald-400">
+                    ⭐ +{dailyData.quest.xpReward} XP
+                  </span>
+                  <span className="flex items-center gap-1 text-amber-400">
+                    🪙 +{dailyData.quest.coinReward} Coins
+                  </span>
+                  <span className="flex items-center gap-1 text-cyan-400">
+                    <MapPin className="w-3 h-3" />
+                    {dailyData.quest.targetLocationId?.name || "Campus Ground"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="shrink-0 flex flex-col sm:flex-row gap-2">
+                <Link
+                  href={`/quests/${dailyData.quest._id}`}
+                  className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs font-mono shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
+                >
+                  <Target className="w-4 h-4" />
+                  Solve Daily Clues
+                  <ArrowUpRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Active Campus Event Banner */}
+        {activeEvent && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+            className="rounded-2xl border border-violet-500/30 bg-gradient-to-r from-violet-950/40 via-slate-900 to-cyan-950/30 p-5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+          >
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  LIVE CAMPUS EVENT
+                </span>
+                <span className="text-[10px] font-mono text-cyan-400">
+                  Top Prize: {activeEvent.rewardPool?.firstPlaceCoins || 250} Coins + {activeEvent.rewardPool?.exclusiveTitle || "Title"}
+                </span>
+              </div>
+              <h4 className="text-base font-bold text-white">{activeEvent.title}</h4>
+              <p className="text-xs text-slate-400 font-mono line-clamp-1">
+                {activeEvent.description}
+              </p>
+            </div>
+            <Link
+              href="/events"
+              className="px-4 py-2 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/40 text-violet-300 text-xs font-mono font-bold transition-all flex items-center justify-center gap-1.5 shrink-0"
+            >
+              <span>View Event & Leaderboard</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </Link>
+          </motion.div>
+        )}
 
         {/* Quick Actions */}
         <div>
@@ -257,6 +363,46 @@ export default function DashboardPage() {
             </div>
           </motion.div>
         </div>
+
+        {/* Living Campus Live Telemetry Feed */}
+        {liveFeed.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55 }}
+            className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4"
+          >
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <div className="flex items-center gap-2">
+                <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                <h3 className="font-semibold text-white text-sm font-mono flex items-center gap-2">
+                  Living Campus Telemetry
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    LIVE NETWORK
+                  </span>
+                </h3>
+              </div>
+              <span className="text-[10px] font-mono text-slate-500">Autonomous activity ledger</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {liveFeed.slice(0, 6).map((item) => (
+                <div
+                  key={item.id}
+                  className="p-3 rounded-xl bg-slate-950/60 border border-white/5 flex items-start gap-3 hover:border-emerald-500/30 transition-colors"
+                >
+                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                    item.badgeColor === "emerald" ? "bg-emerald-400 shadow-sm shadow-emerald-400" : item.badgeColor === "cyan" ? "bg-cyan-400 shadow-sm shadow-cyan-400" : "bg-amber-400 shadow-sm shadow-amber-400"
+                  }`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-slate-200 truncate">{item.title}</p>
+                    <p className="text-[11px] text-slate-400 font-mono mt-0.5 line-clamp-2">{item.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Footer CTAs */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}

@@ -499,6 +499,9 @@ export interface IQuest extends Document {
   currentCompletions: number;
   status: "ACTIVE" | "COMPLETED" | "EXPIRED" | "DRAFT";
   expiresAt?: Date | null;
+  generationSource?: "AI" | "TEMPLATE" | "ADMIN";
+  dailyDate?: string | null;
+  theme?: string;
 }
 
 const QuestSchema = new Schema<IQuest>(
@@ -539,6 +542,13 @@ const QuestSchema = new Schema<IQuest>(
     finderBonusXp: { type: Number, default: 25 },
     maxCompletions: { type: Number, default: 1 },
     currentCompletions: { type: Number, default: 0 },
+    generationSource: {
+      type: String,
+      enum: ["AI", "TEMPLATE", "ADMIN"],
+      default: "ADMIN",
+    },
+    dailyDate: { type: String, default: null, index: true },
+    theme: { type: String, default: "" },
     status: {
       type: String,
       enum: ["ACTIVE", "COMPLETED", "EXPIRED", "DRAFT"],
@@ -898,6 +908,8 @@ export interface IEvent extends Document {
     thirdPlaceCoins: number;
     exclusiveTitle: string;
   };
+  generationSource?: "AI" | "TEMPLATE" | "ADMIN";
+  featuredBadge?: string;
   status: "UPCOMING" | "LIVE" | "ENDED" | "CANCELLED";
 }
 
@@ -925,6 +937,12 @@ const EventSchema = new Schema<IEvent>(
     eligibleDepartments: { type: [String], default: ["ALL"] },
     isSquadEvent: { type: Boolean, default: false },
     linkedQuestIds: [{ type: Schema.Types.ObjectId, ref: "Quest" }],
+    generationSource: {
+      type: String,
+      enum: ["AI", "TEMPLATE", "ADMIN"],
+      default: "ADMIN",
+    },
+    featuredBadge: { type: String, default: "Award" },
     participants: [
       {
         userId: { type: Schema.Types.ObjectId, ref: "User" },

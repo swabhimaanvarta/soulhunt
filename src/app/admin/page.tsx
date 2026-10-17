@@ -17,10 +17,13 @@ import {
   Building,
   Save,
   Check,
+  Sparkles,
+  Trophy,
+  Calendar,
 } from "lucide-react";
 
 export default function AdminControlPage() {
-  const [activeTab, setActiveTab] = useState<"CONFIG" | "FRAUD" | "CREATE_QUEST" | "LOCATIONS">("CONFIG");
+  const [activeTab, setActiveTab] = useState<"CONFIG" | "FRAUD" | "CREATE_QUEST" | "LOCATIONS" | "AI_GENERATOR">("CONFIG");
   const [overview, setOverview] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
@@ -79,6 +82,28 @@ export default function AdminControlPage() {
     operatingHours: "08:00 AM - 06:00 PM",
   });
   const [locSubmitting, setLocSubmitting] = useState(false);
+
+  // AI Game Master state
+  const [aiTheme, setAiTheme] = useState("CAMPUS_MYSTERY");
+  const [aiDifficulty, setAiDifficulty] = useState(3);
+  const [aiQuestType, setAiQuestType] = useState("CAMPUS_TREASURE");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
+  const [generatedQuestData, setGeneratedQuestData] = useState<any>(null);
+
+  // Campus Event Organizer state
+  const [newEvent, setNewEvent] = useState({
+    title: "",
+    description: "",
+    eventType: "INTER_DEPT",
+    rules: "Solve sequential clues; strictly safe items; winner takes 300 Coins.",
+    firstPlaceCoins: 300,
+    secondPlaceCoins: 175,
+    thirdPlaceCoins: 100,
+    exclusiveTitle: "AIEM Vanguard",
+  });
+  const [eventSubmitting, setEventSubmitting] = useState(false);
+  const [eventSuccess, setEventSuccess] = useState<string | null>(null);
 
   const fetchOverview = async () => {
     try {
@@ -273,6 +298,78 @@ export default function AdminControlPage() {
     }));
   };
 
+  const handleAIGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAiGenerating(true);
+    setAiSuccessMessage(null);
+    setGeneratedQuestData(null);
+
+    try {
+      const res = await fetch("/api/ai/generate-quest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          theme: aiTheme,
+          difficulty: aiDifficulty,
+          questType: aiQuestType,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Generation failed.");
+
+      setAiSuccessMessage(`Generated quest "${json.data?.quest?.title}" via ${json.data?.source}!`);
+      setGeneratedQuestData(json.data);
+      fetchOverview();
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEventSubmitting(true);
+    setEventSuccess(null);
+
+    try {
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newEvent.title,
+          description: newEvent.description,
+          eventType: newEvent.eventType,
+          rules: newEvent.rules.split(";").map((r) => r.trim()).filter(Boolean),
+          rewardPool: {
+            firstPlaceCoins: newEvent.firstPlaceCoins,
+            secondPlaceCoins: newEvent.secondPlaceCoins,
+            thirdPlaceCoins: newEvent.thirdPlaceCoins,
+            exclusiveTitle: newEvent.exclusiveTitle,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Failed to create event.");
+
+      setEventSuccess(`Campus event "${json.data?.title}" successfully published!`);
+      setNewEvent({
+        title: "",
+        description: "",
+        eventType: "INTER_DEPT",
+        rules: "Solve sequential clues; strictly safe items; winner takes 300 Coins.",
+        firstPlaceCoins: 300,
+        secondPlaceCoins: 175,
+        thirdPlaceCoins: 100,
+        exclusiveTitle: "AIEM Vanguard",
+      });
+    } catch (e: any) {
+      alert(e.message);
+    } finally {
+      setEventSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-20 text-center font-mono text-slate-500 animate-pulse">
@@ -306,6 +403,7 @@ export default function AdminControlPage() {
             { id: "CONFIG", label: "Game Economy", icon: Settings },
             { id: "FRAUD", label: `Fraud Alerts (${overview?.stats?.openFraudAlerts || 0})`, icon: AlertTriangle },
             { id: "CREATE_QUEST", label: "Deploy Quest", icon: Compass },
+            { id: "AI_GENERATOR", label: "AI Game Master & Events", icon: Sparkles },
             { id: "LOCATIONS", label: "Campus Zones", icon: Building },
           ].map((t) => {
             const Icon = t.icon;
@@ -813,6 +911,267 @@ export default function AdminControlPage() {
             {locSubmitting ? "Registering Location..." : "Add to Campus Map"}
           </button>
         </form>
+      )}
+
+      {/* AI GAME MASTER & CAMPUS EVENT ORGANIZER */}
+      {activeTab === "AI_GENERATOR" && (
+        <div className="space-y-8 animate-in fade-in">
+          {/* AI Game Master Card */}
+          <div className="glass-panel rounded-2xl p-6 sm:p-8 space-y-6 border border-violet-500/30 bg-slate-900/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div>
+                <h2 className="text-xl font-black text-white flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-violet-400" />
+                  AI Game Master Engine
+                </h2>
+                <p className="text-xs text-slate-400 font-mono mt-1">
+                  Provider-independent generator (Gemini / OpenAI / Deterministic Local Fallback). Generates cohesive clue chains, logic gates, cipher puzzles, and verified answers anchored to real campus zones.
+                </p>
+              </div>
+              <span className="px-3 py-1 rounded-full text-[10px] font-mono bg-violet-500/20 text-violet-300 border border-violet-500/30 self-start sm:self-auto font-bold">
+                100% ETHICAL & SAFE
+              </span>
+            </div>
+
+            {aiSuccessMessage && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono flex items-center gap-3">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{aiSuccessMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAIGenerate} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">Quest Theme</label>
+                  <select
+                    value={aiTheme}
+                    onChange={(e) => setAiTheme(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-violet-400"
+                  >
+                    <option value="CAMPUS_MYSTERY">Campus History & Lore</option>
+                    <option value="ELECTRONICS_LOGIC">Electronics & Logic Gates</option>
+                    <option value="LIBRARY_ARCHIVE">Library & Literary Cryptograms</option>
+                    <option value="SUSTAINABILITY">Clean Energy & Microgrid</option>
+                    <option value="ROBOTICS_CAD">Robotics, CAD & Trajectories</option>
+                    <option value="CAMPUS_CULTURE">Campus Culture & Canteen Lore</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">Difficulty Level</label>
+                  <select
+                    value={aiDifficulty}
+                    onChange={(e) => setAiDifficulty(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-violet-400"
+                  >
+                    <option value={1}>Level 1: Rookie Scout (Easy)</option>
+                    <option value={2}>Level 2: Campus Tracker (Standard)</option>
+                    <option value={3}>Level 3: Field Investigator (Medium)</option>
+                    <option value={4}>Level 4: Senior Detective (Challenging)</option>
+                    <option value={5}>Level 5: Master Hunter (Cryptic)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">Quest Category</label>
+                  <select
+                    value={aiQuestType}
+                    onChange={(e) => setAiQuestType(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-violet-400"
+                  >
+                    <option value="CAMPUS_TREASURE">Campus Treasure Hunt</option>
+                    <option value="DAILY_HUNT">Daily Mystery Hunt</option>
+                    <option value="SQUAD_HUNT">Squad Investigation</option>
+                    <option value="MYSTERY">Cryptic Campus Mystery</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={aiGenerating}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-violet-600 via-indigo-600 to-emerald-600 hover:from-violet-500 hover:to-emerald-500 text-white font-bold text-xs font-mono shadow-xl shadow-violet-500/20 transition-all flex items-center justify-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                {aiGenerating ? "Game Master Weaving Clue Matrix..." : "Generate & Deploy AI Quest Now"}
+              </button>
+            </form>
+
+            {/* Generated Quest Inspection Card */}
+            {generatedQuestData && (
+              <div className="mt-6 p-5 rounded-2xl bg-slate-950 border border-violet-500/30 space-y-4">
+                <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                  <div>
+                    <span className="text-[10px] font-mono text-violet-400 font-bold uppercase">
+                      Generated via {generatedQuestData.source} ({generatedQuestData.modelName || "engine"})
+                    </span>
+                    <h3 className="text-base font-bold text-white mt-0.5">
+                      {generatedQuestData.quest?.title}
+                    </h3>
+                  </div>
+                  <Link
+                    href={`/quests/${generatedQuestData.quest?._id}`}
+                    className="px-3 py-1.5 rounded-lg bg-violet-500/20 text-violet-300 border border-violet-500/30 text-xs font-mono font-bold hover:bg-violet-500/30"
+                  >
+                    Open Quest Board →
+                  </Link>
+                </div>
+
+                <p className="text-xs text-slate-300 font-mono leading-relaxed">
+                  {generatedQuestData.quest?.description}
+                </p>
+
+                <div className="grid grid-cols-3 gap-3 font-mono text-center text-xs">
+                  <div className="p-2 rounded-xl bg-slate-900 border border-white/5">
+                    <span className="text-slate-400 text-[10px]">XP Reward</span>
+                    <div className="font-bold text-emerald-400">+{generatedQuestData.quest?.xpReward} XP</div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-slate-900 border border-white/5">
+                    <span className="text-slate-400 text-[10px]">Coin Payout</span>
+                    <div className="font-bold text-amber-400">+{generatedQuestData.quest?.coinReward} 🪙</div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-slate-900 border border-white/5">
+                    <span className="text-slate-400 text-[10px]">Total Stages</span>
+                    <div className="font-bold text-cyan-400">{generatedQuestData.cluesCount} Stages</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* AI Campus Event Organizer Card */}
+          <div className="glass-panel rounded-2xl p-6 sm:p-8 space-y-6 border border-emerald-500/30 bg-slate-900/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div>
+                <h2 className="text-xl font-black text-white flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-emerald-400" />
+                  Campus Event Organizer Workspace
+                </h2>
+                <p className="text-xs text-slate-400 font-mono mt-1">
+                  Launch multi-stage festival treasure hunts, department competitions, or orientation races.
+                </p>
+              </div>
+              <Link
+                href="/events"
+                className="px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-mono font-bold hover:bg-emerald-500/30 self-start sm:self-auto"
+              >
+                View Public Events Page →
+              </Link>
+            </div>
+
+            {eventSuccess && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-mono flex items-center gap-3">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{eventSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateEvent} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">Event Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Hackathon Campus Mystery Sprint"
+                    value={newEvent.title}
+                    onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">Competition Type</label>
+                  <select
+                    value={newEvent.eventType}
+                    onChange={(e) => setNewEvent({ ...newEvent, eventType: e.target.value })}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400"
+                  >
+                    <option value="INTER_DEPT">Inter-Departmental Sprint</option>
+                    <option value="SQUAD_SHOWDOWN">Squad Showdown</option>
+                    <option value="FEST_TREASURE_HUNT">College Festival Treasure Hunt</option>
+                    <option value="ORIENTATION_HUNT">Freshers Orientation Challenge</option>
+                    <option value="FLASH_HUNT">2-Hour Flash Hunt</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-300">Event Description *</label>
+                <textarea
+                  required
+                  rows={2}
+                  placeholder="Describe the premise, checkpoints, and storyline..."
+                  value={newEvent.description}
+                  onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400 leading-relaxed font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-300">
+                  Rules & Protocols (Semicolon ';' separated)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Solve clue nodes in order; Zero tampering with belongings; First squad to verify wins."
+                  value={newEvent.rules}
+                  onChange={(e) => setNewEvent({ ...newEvent, rules: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">1st Place Prize</label>
+                  <input
+                    type="number"
+                    value={newEvent.firstPlaceCoins}
+                    onChange={(e) => setNewEvent({ ...newEvent, firstPlaceCoins: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-amber-400 text-xs font-mono focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">2nd Place Prize</label>
+                  <input
+                    type="number"
+                    value={newEvent.secondPlaceCoins}
+                    onChange={(e) => setNewEvent({ ...newEvent, secondPlaceCoins: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-slate-300 text-xs font-mono focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">3rd Place Prize</label>
+                  <input
+                    type="number"
+                    value={newEvent.thirdPlaceCoins}
+                    onChange={(e) => setNewEvent({ ...newEvent, thirdPlaceCoins: Number(e.target.value) })}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-slate-300 text-xs font-mono focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300">Exclusive Title</label>
+                  <input
+                    type="text"
+                    value={newEvent.exclusiveTitle}
+                    onChange={(e) => setNewEvent({ ...newEvent, exclusiveTitle: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-cyan-400 text-xs font-mono focus:outline-none focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={eventSubmitting}
+                className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono shadow-xl shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+              >
+                <Trophy className="w-4 h-4" />
+                {eventSubmitting ? "Publishing Event to Campus Ledger..." : "Publish Campus Event to Students"}
+              </button>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

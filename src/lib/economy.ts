@@ -1,4 +1,5 @@
 import { Types } from "mongoose";
+import { connectDB } from "@/lib/db";
 import {
   SystemConfig,
   User,
@@ -25,6 +26,7 @@ export async function checkPairCollusion(
   userBId: Types.ObjectId,
   referenceId: Types.ObjectId
 ): Promise<{ isCollusion: boolean; count: number }> {
+  await connectDB();
   const config = await SystemConfig.findOne({ key: "GLOBAL_CONFIG" });
   const windowDays = config?.pairCollusionWindowDays ?? 30;
   const maxAllowed = config?.pairCollusionMaxCount ?? 2;
@@ -66,6 +68,7 @@ export async function grantUserRewards(params: {
   counterpartyUserId?: Types.ObjectId;
   approvedBy?: Types.ObjectId;
 }) {
+  await connectDB();
   const config = (await SystemConfig.findOne({ key: "GLOBAL_CONFIG" })) || {
     xpPerLevelBase: 250,
     globalXpMultiplier: 1,
@@ -85,6 +88,18 @@ export async function grantUserRewards(params: {
 
   const user = await User.findById(params.userId);
   if (!user) return null;
+
+  // Idempotency check: prevent double payout for the same Quest or Recovery
+  if (params.referenceId && (params.referenceType === "QUEST" || params.referenceType === "RECOVERY")) {
+    const existingTx = await Transaction.findOne({
+      userId: params.userId,
+      referenceType: params.referenceType,
+      referenceId: params.referenceId,
+    });
+    if (existingTx) {
+      return { user, finalXp: 0, finalCoins: 0, alreadyClaimed: true };
+    }
+  }
 
   user.xp = Math.max(0, user.xp + finalXp);
   user.coins = Math.max(0, user.coins + finalCoins);
@@ -140,6 +155,7 @@ export async function distributeSquadQuestRewards(params: {
   questId: Types.ObjectId;
   questTitle: string;
 }) {
+  await connectDB();
   const config = await SystemConfig.findOne({ key: "GLOBAL_CONFIG" });
   const bonusPct = Math.min(
     config?.maxFinderBonusPct ?? 25,
@@ -195,6 +211,7 @@ export async function distributeSquadQuestRewards(params: {
 }
 
 export async function evaluateUserAchievements(userId: Types.ObjectId) {
+  await connectDB();
   const user = await User.findById(userId);
   if (!user) return;
 
