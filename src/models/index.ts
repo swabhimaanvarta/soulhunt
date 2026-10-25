@@ -550,7 +550,7 @@ const ClaimRequestSchema = new Schema<IClaimRequest>(
     itemId: { type: Schema.Types.ObjectId, required: true, index: true },
     claimantId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     counterpartyUserId: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    submittedAnswer: { type: String, required: true },
+    submittedAnswer: { type: String, default: "" },
     proofPhotoUrl: { type: String, default: "" },
     notes: { type: String, default: "" },
     handoverCode: { type: String, select: false },

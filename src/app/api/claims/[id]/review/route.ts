@@ -93,6 +93,7 @@ export async function POST(
       const handoverCodeExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour expiration policy
 
       claim.status = "APPROVED";
+      claim.handoverCode = handoverCode;
       claim.handoverCodeHash = handoverCodeHash;
       claim.handoverCodeExpiresAt = handoverCodeExpiresAt;
       claim.handoverAttempts = 0;

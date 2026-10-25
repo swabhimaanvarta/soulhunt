@@ -103,7 +103,7 @@ export async function POST(
       );
     }
 
-    let lostItem = await LostItem.findById(id);
+    let lostItem = await LostItem.findById(id).select("+verificationAnswerHash");
     let foundItem = null;
     let itemType: "LOST" | "FOUND" = "LOST";
     let counterpartyUserId: Types.ObjectId;
@@ -178,6 +178,7 @@ export async function POST(
       status: autoApproved ? "APPROVED" : "PENDING",
       ...(autoApproved
         ? {
+            handoverCode,
             handoverCodeHash,
             handoverCodeExpiresAt,
             handoverAttempts: 0,
