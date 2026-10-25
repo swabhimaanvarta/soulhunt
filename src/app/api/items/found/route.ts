@@ -38,8 +38,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = FoundItemSchema.safeParse(body);
     if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      const field = firstIssue?.path?.join(".") || "Input";
+      const message = `${field}: ${firstIssue?.message || "Invalid value"}`;
       return NextResponse.json(
-        { success: false, error: "Validation error", details: parsed.error.flatten() },
+        { success: false, error: message, details: parsed.error.flatten() },
         { status: 400 }
       );
     }
@@ -57,8 +60,37 @@ export async function POST(req: NextRequest) {
       photoUrl,
     } = parsed.data;
 
-    const { sanitizedText } = sanitizeSensitiveText(publicDescription);
+    // Sanitize PII & isolate identifiers
+    let cleanDesc = publicDescription;
+    const sensitiveMatch = publicDescription.match(/(?:barcode|serial\s*(?:no|number|#)?|matriculation\s*id)\s*[:#-]?\s*([A-Za-z0-9_-]+)/i);
+    if (sensitiveMatch) {
+      cleanDesc = cleanDesc.replace(sensitiveMatch[0], "[unique identifier withheld for privacy]");
+    }
+
+    const { sanitizedText } = sanitizeSensitiveText(cleanDesc);
     const photoRequiresBlur = requiresAutomaticPhotoBlur(category);
+
+    // Non-blocking duplicate detection within 48 hours
+    let duplicateCandidate: any = null;
+    try {
+      const recentSimilar = await FoundItem.findOne({
+        category,
+        foundLocationId: new Types.ObjectId(foundLocationId),
+        status: { $in: ["SUBMITTED", "APPROVED", "ACTIVE"] },
+        createdAt: { $gte: new Date(Date.now() - 48 * 3600 * 1000) },
+        finderId: { $ne: user._id },
+      }).lean();
+
+      if (recentSimilar) {
+        duplicateCandidate = {
+          id: recentSimilar._id,
+          title: recentSimilar.title,
+          note: "A similar found item was reported recently at this location.",
+        };
+      }
+    } catch {
+      // Non-blocking
+    }
 
     const foundItem = await FoundItem.create({
       finderId: user._id,
@@ -85,27 +117,21 @@ export async function POST(req: NextRequest) {
       ],
     });
 
-    // Reward finder for ethical reporting
-    const isSafeDesk = custodyStatus === "SAFE_DESK";
-    await grantUserRewards({
-      userId: user._id as Types.ObjectId,
-      baseXp: isSafeDesk ? 80 : 40,
-      baseCoins: isSafeDesk ? 20 : 10,
-      deltaTrust: isSafeDesk ? 20 : 10,
-      reason: `Ethical Found-Item Report (${title}) ${isSafeDesk ? "at Campus Safe-Desk" : ""}`,
-      referenceType: "RECOVERY",
-      referenceId: foundItem._id as Types.ObjectId,
-    });
+    // Economy integrity: Rewards are NOT awarded on self-report to prevent farming.
+    // Full recovery XP, coins, and trust are granted when Safe-Desk staff confirms physical intake or verified handover.
 
-    if (isSafeDesk) {
-      await User.findByIdAndUpdate(user._id, {
-        $inc: { "stats.safeDeskDepositsCount": 1 },
-      });
-    }
-
-    return NextResponse.json({ success: true, data: foundItem }, { status: 201 });
+    return NextResponse.json({
+      success: true,
+      data: {
+        ...foundItem.toObject(),
+        duplicateCandidate,
+      },
+    }, { status: 201 });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: { code: "FOUND_REPORT_FAILED", message: "Failed to submit found item report." } },
+      { status: 500 }
+    );
   }
 }
 

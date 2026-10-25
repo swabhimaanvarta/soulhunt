@@ -39,14 +39,36 @@ export async function createAIGameMasterQuest(options: GenerateQuestOptions = {}
 
   // 4. Generate unique quest code
   const totalCount = await Quest.countDocuments();
-  const questCode = `Quest #${String(totalCount + 1).padStart(3, "0")}`;
+  let questCode = `Quest #${String(totalCount + 1).padStart(3, "0")}`;
+  const existingCode = await Quest.findOne({ questCode });
+  if (existingCode) {
+    questCode = `Quest #${String(totalCount + 1).padStart(3, "0")}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
+  }
 
-  // 5. Create Quest in DB
+  const VALID_QUEST_TYPES = [
+    "QUICK_FIND",
+    "INVESTIGATION",
+    "MYSTERY",
+    "LEGENDARY",
+    "DAILY_HUNT",
+    "SQUAD_HUNT",
+    "CAMPUS_TREASURE",
+  ];
+  let finalQuestType = "CAMPUS_TREASURE";
+  if (template.questType && VALID_QUEST_TYPES.includes(template.questType)) {
+    finalQuestType = template.questType;
+  } else if (options.questType && VALID_QUEST_TYPES.includes(options.questType)) {
+    finalQuestType = options.questType;
+  }
+
+  // 5. Create Quest in DB (Default DRAFT for admin review, or ACTIVE if requested)
+  const initialStatus = options.status || "DRAFT";
+
   const quest = await Quest.create({
     questCode,
     title: template.title,
     description: template.description,
-    questType: template.questType || options.questType || "CAMPUS_TREASURE",
+    questType: finalQuestType,
     difficulty: template.difficulty || options.difficulty || 3,
     targetLocationId: targetLocation._id,
     xpReward: template.xpReward || 200,
@@ -55,11 +77,12 @@ export async function createAIGameMasterQuest(options: GenerateQuestOptions = {}
     finderBonusXp: Math.round((template.xpReward || 200) * 0.15),
     generationSource: source === "TEMPLATE" ? "TEMPLATE" : "AI",
     theme: template.theme || options.theme || "CAMPUS_MYSTERY",
-    status: "ACTIVE",
-    dailyDate: options.questType === "DAILY_HUNT" ? new Date().toISOString().split("T")[0] : null,
+    status: initialStatus,
+    dailyDate: finalQuestType === "DAILY_HUNT" ? new Date().toISOString().split("T")[0] : null,
   });
 
   // 6. Insert Clues
+  let preparedClues: any[] = [];
   if (Array.isArray(template.clues) && template.clues.length > 0) {
     const clueDocs = template.clues.map((c, idx) => ({
       questId: quest._id,
@@ -75,13 +98,25 @@ export async function createAIGameMasterQuest(options: GenerateQuestOptions = {}
     }));
 
     await Clue.insertMany(clueDocs);
+
+    preparedClues = template.clues.map((c, idx) => ({
+      stageOrder: c.stageOrder || idx + 1,
+      title: c.title || `Stage ${idx + 1}`,
+      clueText: c.clueText,
+      verificationType: c.verificationType || "TEXT_RIDDLE",
+      expectedAnswer: c.expectedAnswer || "aiem",
+      hintText: c.hintText || "Search your surroundings and examine the clue prompt closely.",
+      hintCoinCost: c.hintCoinCost || 10,
+      unlockedBreadcrumbText: c.unlockedBreadcrumbText || "Clue stage solved! Next coordinate unlocked.",
+    }));
   }
 
   return {
     quest,
+    clues: preparedClues,
     source,
     modelName,
-    cluesCount: template.clues?.length || 0,
+    cluesCount: preparedClues.length,
   };
 }
 

@@ -1,3 +1,4 @@
+@import "leaflet/dist/leaflet.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -41,44 +42,288 @@
   * {
     @apply border-border;
   }
+  html {
+    max-width: 100%;
+    overflow-x: hidden;
+    position: relative;
+    width: 100%;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
     min-height: 100vh;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 100%;
     overflow-x: hidden;
+    position: relative;
+    width: 100%;
+  }
+  main, section, header, footer {
+    max-width: 100%;
+  }
+
+  /* Universal button disabled and loading state optimization */
+  button:disabled,
+  input[type="submit"]:disabled {
+    pointer-events: none !important;
+    cursor: not-allowed !important;
   }
 }
 
-/* Tactical UI utilities */
+/* Hide horizontal scrollbar while keeping smooth touch scrolling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.safe-area-pb {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0.5rem));
+}
+
+/* Ensure Leaflet container does not blow out mobile width or touch handling */
+.leaflet-container {
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+
+/* =========================================================================
+   TACTICAL & NEON CYBER UI UTILITIES
+   Brings back the iconic glowing neon blocks, cyber telemetry, and HUD grid
+   ========================================================================= */
+
+/* Glass Panels */
 .glass-panel {
-  background: rgba(17, 24, 39, 0.85);
+  background: rgba(13, 19, 33, 0.82);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .glass-panel-glow {
-  background: rgba(17, 24, 39, 0.9);
+  background: rgba(13, 19, 33, 0.88);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  box-shadow: 0 0 25px -5px rgba(16, 185, 129, 0.22);
 }
 
+/* Iconic Glowy Neon Blocks */
+.neon-block {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.85) 0%, rgba(9, 14, 26, 0.92) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.neon-block-emerald {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(11, 15, 23, 0.9) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  box-shadow: 0 0 20px -3px rgba(16, 185, 129, 0.2), inset 0 0 15px -3px rgba(16, 185, 129, 0.08);
+}
+
+.neon-block-emerald:hover {
+  border-color: rgba(52, 211, 153, 0.65);
+  box-shadow: 0 0 30px -2px rgba(16, 185, 129, 0.38), inset 0 0 20px -2px rgba(16, 185, 129, 0.15);
+  transform: translateY(-2px);
+}
+
+.neon-block-cyan {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.06) 0%, rgba(11, 15, 23, 0.9) 100%);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  box-shadow: 0 0 20px -3px rgba(6, 182, 212, 0.2), inset 0 0 15px -3px rgba(6, 182, 212, 0.08);
+}
+
+.neon-block-cyan:hover {
+  border-color: rgba(34, 211, 238, 0.65);
+  box-shadow: 0 0 30px -2px rgba(6, 182, 212, 0.38), inset 0 0 20px -2px rgba(6, 182, 212, 0.15);
+  transform: translateY(-2px);
+}
+
+.neon-block-amber {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.06) 0%, rgba(11, 15, 23, 0.9) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  box-shadow: 0 0 20px -3px rgba(245, 158, 11, 0.2), inset 0 0 15px -3px rgba(245, 158, 11, 0.08);
+}
+
+.neon-block-amber:hover {
+  border-color: rgba(251, 191, 36, 0.65);
+  box-shadow: 0 0 30px -2px rgba(245, 158, 11, 0.38), inset 0 0 20px -2px rgba(245, 158, 11, 0.15);
+  transform: translateY(-2px);
+}
+
+.neon-block-violet {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.06) 0%, rgba(11, 15, 23, 0.9) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 0 20px -3px rgba(139, 92, 246, 0.2), inset 0 0 15px -3px rgba(139, 92, 246, 0.08);
+}
+
+.neon-block-violet:hover {
+  border-color: rgba(167, 139, 250, 0.65);
+  box-shadow: 0 0 30px -2px rgba(139, 92, 246, 0.38), inset 0 0 20px -2px rgba(139, 92, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+.neon-block-rose {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.06) 0%, rgba(11, 15, 23, 0.9) 100%);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  box-shadow: 0 0 20px -3px rgba(244, 63, 94, 0.2), inset 0 0 15px -3px rgba(244, 63, 94, 0.08);
+}
+
+.neon-block-rose:hover {
+  border-color: rgba(251, 113, 133, 0.65);
+  box-shadow: 0 0 30px -2px rgba(244, 63, 94, 0.38), inset 0 0 20px -2px rgba(244, 63, 94, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Tactical Cyber Grid Background */
 .tactical-grid {
+  background-color: #070A0F;
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+}
+
+.tactical-grid-glow {
+  background-color: #05080E;
   background-size: 32px 32px;
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.06) 0%, transparent 70%),
+    linear-gradient(to right, rgba(16, 185, 129, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 185, 129, 0.08) 1px, transparent 1px);
 }
 
-/* Custom scrollbars */
+.cyber-dots-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Radar & Scanner Animations */
+@keyframes radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.radar-sweep {
+  animation: radar-sweep 5s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes scanline-move {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(550px);
+    opacity: 0;
+  }
+}
+
+.scanner-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(16, 185, 129, 0.8) 50%, transparent 100%);
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.8), 0 0 30px rgba(16, 185, 129, 0.4);
+  animation: scanline-move 4s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.scanner-line-cyan {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(6, 182, 212, 0.8) 50%, transparent 100%);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.8), 0 0 30px rgba(6, 182, 212, 0.4);
+  animation: scanline-move 4.5s ease-in-out infinite;
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* Pulse Glow & Halo Effects */
+@keyframes pulse-halo {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.05);
+  }
+}
+
+.pulse-halo {
+  animation: pulse-halo 3s ease-in-out infinite;
+}
+
+/* Neon Text Glows */
+.neon-text-emerald {
+  text-shadow: 0 0 10px rgba(16, 185, 129, 0.5), 0 0 20px rgba(16, 185, 129, 0.3);
+}
+
+.neon-text-cyan {
+  text-shadow: 0 0 10px rgba(6, 182, 212, 0.5), 0 0 20px rgba(6, 182, 212, 0.3);
+}
+
+.neon-text-amber {
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.5), 0 0 20px rgba(245, 158, 11, 0.3);
+}
+
+/* HUD Corner Brackets */
+.hud-corner {
+  position: relative;
+}
+
+.hud-corner::before,
+.hud-corner::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+}
+
+.hud-corner::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid rgba(16, 185, 129, 0.7);
+  border-left: 2px solid rgba(16, 185, 129, 0.7);
+}
+
+.hud-corner::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid rgba(16, 185, 129, 0.7);
+  border-right: 2px solid rgba(16, 185, 129, 0.7);
+}
+
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B0F17;
+  background: #070A0F;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -87,6 +332,48 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #10B981;
 }
 
+/* Custom Leaflet Tactical Dark Theme */
+.leaflet-container {
+  background-color: #060a10 !important;
+  font-family: inherit !important;
+  z-index: 1;
+}
+
+.leaflet-popup-content-wrapper {
+  background: #0b0f17 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.25) !important;
+}
+
+.leaflet-popup-tip {
+  background: #0b0f17 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+}
+
+.leaflet-control-zoom a {
+  background: #0b0f17 !important;
+  color: #10b981 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: #10b981 !important;
+  color: #020617 !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(6, 10, 16, 0.85) !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+  border-top-left-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.leaflet-control-attribution a {
+  color: #10b981 !important;
+}

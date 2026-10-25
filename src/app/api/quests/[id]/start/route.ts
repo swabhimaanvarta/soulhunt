@@ -25,9 +25,33 @@ export async function POST(
 
     const isSquadInvestigation = Boolean(asSquad && user.squadId);
 
-    // Check if an investigation already exists
+    // 1. Strict single-entry guard: check if user or squad already completed this quest
+    const completed = await Investigation.findOne({
+      questId: quest._id,
+      status: "COMPLETED",
+      $or: [
+        { userId: user._id },
+        ...(user.squadId ? [{ squadId: user.squadId }] : []),
+        { participatingUserIds: user._id },
+      ],
+    });
+
+    if (completed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "You have already completed this quest and claimed your rewards. Multiple submissions are not permitted.",
+          code: "ALREADY_COMPLETED",
+          data: { investigationId: completed._id, isCompleted: true },
+        },
+        { status: 400 }
+      );
+    }
+
+    // 2. Check if an active/in-progress investigation already exists to resume
     let existing = await Investigation.findOne({
       questId: quest._id,
+      status: { $in: ["IN_PROGRESS", "READY_FOR_RECOVERY", "PAUSED"] },
       ...(isSquadInvestigation
         ? { squadId: user.squadId }
         : { userId: user._id, isSquadInvestigation: false }),

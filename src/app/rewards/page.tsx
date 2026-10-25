@@ -12,6 +12,7 @@ import {
   Coffee,
   BookOpen,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
 
 export default function RewardsShopPage() {
@@ -43,6 +44,7 @@ export default function RewardsShopPage() {
   }, []);
 
   const handlePurchase = async (rewardId: string) => {
+    if (purchasingId) return;
     setPurchasingId(rewardId);
     setMessage(null);
 
@@ -55,7 +57,8 @@ export default function RewardsShopPage() {
 
       const json = await res.json();
       if (!json.success) {
-        throw new Error(json.error || "Purchase failed");
+        const errorMsg = json.error?.message || (typeof json.error === "string" ? json.error : "Purchase failed");
+        throw new Error(errorMsg);
       }
 
       setMessage({ text: json.message || "Acquired successfully!", error: false });
@@ -85,7 +88,7 @@ export default function RewardsShopPage() {
             Hunter Shop & Rewards Hub
           </h1>
           <p className="text-sm text-slate-400 max-w-2xl">
-            Redeem Hunter Coins earned from recoveries and investigations for tactical cosmetic titles, holographic frames, campus study passes, and canteen vouchers.
+            Redeem Hunter Coins earned from recoveries and investigations for tactical cosmetic titles, holographic frames, cybernetic themes, and squad prestige badges.
           </p>
         </div>
 
@@ -175,20 +178,24 @@ export default function RewardsShopPage() {
 
                 <div className="pt-5 mt-4 border-t border-white/5">
                   <button
+                    type="button"
                     onClick={() => handlePurchase(reward._id)}
                     disabled={purchasingId === reward._id || !canAfford || !meetsLevel || isSoldOut}
-                    className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2 ${
+                    className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer ${
                       isSoldOut
-                        ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                        ? "bg-slate-800 text-slate-500"
                         : !meetsLevel
-                        ? "bg-rose-950/40 border border-rose-500/30 text-rose-300 cursor-not-allowed"
+                        ? "bg-rose-950/40 border border-rose-500/30 text-rose-300"
                         : !canAfford
-                        ? "bg-slate-900 border border-white/10 text-slate-500 cursor-not-allowed"
+                        ? "bg-slate-900 border border-white/10 text-slate-500"
                         : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20"
                     }`}
                   >
                     {purchasingId === reward._id ? (
-                      "Purchasing..."
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Acquiring from Armory...</span>
+                      </>
                     ) : isSoldOut ? (
                       "Sold Out"
                     ) : !meetsLevel ? (
@@ -198,7 +205,7 @@ export default function RewardsShopPage() {
                     ) : (
                       <>
                         <Sparkles className="w-3.5 h-3.5" />
-                        Acquire for {reward.coinCost} Coins
+                        <span>Acquire for {reward.coinCost} Coins</span>
                       </>
                     )}
                   </button>

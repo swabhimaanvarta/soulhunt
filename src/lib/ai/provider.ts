@@ -17,10 +17,12 @@ import { validateQuestSafety } from "./safetyValidator";
 export interface GenerateQuestOptions {
   theme?: string;
   difficulty?: number;
-  questType?: "CAMPUS_TREASURE" | "DAILY_HUNT" | "MYSTERY" | "LEGENDARY" | "SQUAD_HUNT";
+  questType?: "CAMPUS_TREASURE" | "DAILY_HUNT" | "MYSTERY" | "LEGENDARY" | "SQUAD_HUNT" | "QUICK_FIND" | "INVESTIGATION";
   locationName?: string;
   locationCode?: string;
   stageCount?: number;
+  prompt?: string;
+  status?: "DRAFT" | "ACTIVE";
 }
 
 export interface GeneratedQuestOutput {
@@ -55,10 +57,39 @@ export async function generateCampusQuest(
     }
   }
 
-  // 3. Deterministic Local Fallback (Guaranteed reliability)
+  // 3. Deterministic Local Engine (Guaranteed reliability conforming to prompt, stageCount, and difficulty)
   const template = getRandomChallengeTemplate(options.theme, options.difficulty);
   if (options.questType) template.questType = options.questType;
   if (options.locationCode) template.locationCode = options.locationCode;
+  if (options.difficulty) {
+    template.difficulty = options.difficulty;
+    template.xpReward = options.difficulty * 75;
+    template.coinReward = options.difficulty * 15;
+    template.squadXpReward = options.difficulty * 25;
+  }
+  if (options.prompt && options.prompt.trim()) {
+    const cleanPrompt = options.prompt.trim();
+    template.title = cleanPrompt.length > 50 ? cleanPrompt.slice(0, 47) + "..." : cleanPrompt;
+    template.description = `Mission Briefing: ${cleanPrompt}. Follow all investigative stages carefully across AIEM campus to recover the target and record your findings on the ledger.`;
+  }
+  if (options.stageCount && options.stageCount > 0 && Array.isArray(template.clues)) {
+    while (template.clues.length < options.stageCount) {
+      const stage = template.clues.length + 1;
+      template.clues.push({
+        stageOrder: stage,
+        title: `Stage ${stage}: Field Sector Deduction`,
+        clueText: `Investigate the surrounding sector for marker #${stage}. What single code or digit is displayed on the local verification station?`,
+        verificationType: "TEXT_RIDDLE",
+        expectedAnswer: `marker${stage}`,
+        hintText: `Search the local junction or lab door sign near this sector.`,
+        hintCoinCost: 10,
+        unlockedBreadcrumbText: `Marker #${stage} deciphered. Pathway to recovery cleared.`,
+      });
+    }
+    if (template.clues.length > options.stageCount) {
+      template.clues = template.clues.slice(0, options.stageCount);
+    }
+  }
 
   return {
     source: "TEMPLATE",
@@ -171,13 +202,17 @@ function buildQuestPrompt(options: GenerateQuestOptions): string {
   const theme = options.theme || "CAMPUS_MYSTERY";
   const difficulty = options.difficulty || 3;
   const locationCode = options.locationCode || "LIB-01";
+  const customInstructions = options.prompt
+    ? `Admin Custom Story Brief & Directives: "${options.prompt.trim()}"`
+    : "";
 
   return `
 Create a compelling campus mystery quest for AIEM college students.
+${customInstructions}
 Theme: ${theme}
 Target Difficulty: ${difficulty} (out of 5)
 Location Code: ${locationCode}
-Stage Count: ${stageCount}
+Required Stage Count: Exactly ${stageCount} sequential clue stages (ordered 1 to ${stageCount})
 
 JSON Schema required:
 {

@@ -15,7 +15,9 @@ import {
   Sparkles,
   Building,
   Camera,
+  Loader2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ReportFoundItemPage() {
   const router = useRouter();
@@ -46,15 +48,26 @@ export default function ReportFoundItemPage() {
           setSafeDesks(sds);
 
           if (d.data.length > 0) {
+            let initialFoundId = d.data[0]._id;
+            if (typeof window !== "undefined") {
+              const urlParams = new URLSearchParams(window.location.search);
+              const paramId = urlParams.get("locationId");
+              if (paramId && d.data.some((l: any) => l._id === paramId)) {
+                initialFoundId = paramId;
+              }
+            }
+
             setFormData((prev) => ({
               ...prev,
-              foundLocationId: d.data[0]._id,
+              foundLocationId: initialFoundId,
               currentCustodyLocationId: sds[0]?._id || d.data[0]._id,
             }));
           }
         }
       });
   }, []);
+
+  const { toast } = useToast();
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,13 +85,26 @@ export default function ReportFoundItemPage() {
 
       const json = await res.json();
       if (!json.success) {
-        alert(json.error || "Failed to upload photo");
+        toast({
+          title: "Upload Failed",
+          description: json.error || "Failed to upload photo",
+          variant: "destructive",
+        });
         return;
       }
 
       setFormData((prev) => ({ ...prev, photoUrl: json.url }));
+      toast({
+        title: "Photo Attached",
+        description: "Image processed & securely encrypted in evidence storage.",
+        variant: "success",
+      });
     } catch (err: any) {
-      alert(err.message || "Upload error");
+      toast({
+        title: "Upload Error",
+        description: err.message || "Failed to upload photo",
+        variant: "destructive",
+      });
     } finally {
       setUploadingPhoto(false);
     }
@@ -86,6 +112,7 @@ export default function ReportFoundItemPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError(null);
 
@@ -101,9 +128,19 @@ export default function ReportFoundItemPage() {
         throw new Error(json.error || "Failed to submit found item report.");
       }
 
+      toast({
+        title: "Found Item Turned In",
+        description: "Deposit logged in Safe-Desk custody ledger! Reward coins granted.",
+        variant: "success",
+      });
       router.push(`/items/${json.data._id}`);
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
+      toast({
+        title: "Report Failed",
+        description: err.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -343,15 +380,18 @@ export default function ReportFoundItemPage() {
           </Link>
           <button
             type="submit"
-            disabled={loading}
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-xl shadow-emerald-500/25 transition-all flex items-center gap-2"
+            disabled={loading || uploadingPhoto}
+            className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-xl shadow-emerald-500/25 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer font-mono"
           >
             {loading ? (
-              <span className="font-mono">Submitting...</span>
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Submitting to Safe-Desk Ledger...</span>
+              </>
             ) : (
               <>
                 <CheckCircle2 className="w-4 h-4" />
-                Submit Found Report & Claim Bounty
+                <span>Submit Found Report & Claim Bounty</span>
               </>
             )}
           </button>

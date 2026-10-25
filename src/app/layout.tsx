@@ -1,13 +1,28 @@
-import type { Metadata } from "next";
+import React, { Suspense } from "react";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import MobileBottomNav from "@/components/MobileBottomNav";
-import { ShieldCheck, Lock, Compass, HelpCircle } from "lucide-react";
+import Footer from "@/components/Footer";
+import RouteProgressBar from "@/components/RouteProgressBar";
+import { Toaster } from "@/components/ui/toaster";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#0B0F17",
+};
 
 export const metadata: Metadata = {
-  title: "AIEM Hunt — Lost & Found & Campus Treasure Hunt",
+  title: "AIEM Hunt — Lost & Found & Campus Treasure Hunt | AIEM - Agnel Institute of Engineering and Management",
   description:
-    "Tactical campus lost-and-found investigation platform and campus treasure hunt RPG for AIEM.",
+    "Official campus lost-and-found investigation platform and cooperative treasure hunt RPG for AIEM - Agnel Institute of Engineering and Management.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/favicon.ico",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
@@ -16,41 +31,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-[#0B0F17] text-slate-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-slate-950 tactical-grid pb-20 md:pb-0">
+    <html lang="en" className="dark max-w-full overflow-x-hidden">
+      <body className="bg-[#0B0F17] text-slate-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-slate-950 tactical-grid pb-28 md:pb-0 w-full max-w-full overflow-x-hidden">
+        <Suspense fallback={null}>
+          <RouteProgressBar />
+        </Suspense>
         <Navbar />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 w-full max-w-full overflow-x-hidden">{children}</main>
         <MobileBottomNav />
-        
-        {/* Tactical Ethical Footer */}
-        <footer className="border-t border-white/10 bg-[#070A0F] py-8 px-4 sm:px-6 lg:px-8 mt-16 text-xs text-slate-500">
-          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="space-y-1 text-center md:text-left">
-              <div className="flex items-center justify-center md:justify-start gap-2 text-slate-300 font-mono font-bold">
-                <Compass className="w-4 h-4 text-emerald-400" />
-                <span>AIEM Lost & Found & Campus Treasure Hunt V1.0</span>
-              </div>
-              <p className="text-slate-400 max-w-xl">
-                Strict Ethical Safety Standard: All belongings remain campus property under custody of AIEM Security Safe-Desks.
-                No student may conceal, relocate, or withhold any found article.
-              </p>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-center gap-4 text-slate-400 font-mono text-[11px]">
-              <span className="flex items-center gap-1.5 text-emerald-400/90">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                Anti-Collusion Engine Active
-              </span>
-              <span className="flex items-center gap-1.5 text-cyan-400/90">
-                <Lock className="w-3.5 h-3.5" />
-                Dual-Code Handover Protocol
-              </span>
-              <span className="text-slate-500">
-                Safe-Desk Help: Main Gate Locker #1 • Library Counter
-              </span>
-            </div>
-          </div>
-        </footer>
+        <Footer />
+        <Toaster />
       </body>
     </html>
   );

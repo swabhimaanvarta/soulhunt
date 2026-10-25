@@ -120,6 +120,7 @@ export default function MobileBottomNav() {
               <Link
                 key={item.label}
                 href={item.href}
+                prefetch={true}
                 className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-xl transition-all active:scale-95 ${
                   item.isActive
                     ? "text-emerald-400 font-bold"

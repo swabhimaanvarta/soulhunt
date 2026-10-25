@@ -20,7 +20,9 @@ import {
   AlertCircle,
   Clock,
   Send,
+  Loader2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface Props {
   initialInvestigation: any;
@@ -40,6 +42,7 @@ export default function InvestigationRoomClient({
   const [investigation, setInvestigation] = useState(initialInvestigation);
   const [clues, setClues] = useState(initialClues);
   const [userCoins, setUserCoins] = useState(currentUser?.coins ?? 50);
+  const { toast } = useToast();
 
   // Clue solving form
   const [answerInput, setAnswerInput] = useState("");
@@ -69,6 +72,7 @@ export default function InvestigationRoomClient({
   const [claimError, setClaimError] = useState<string | null>(null);
 
   const handleClaimRecovery = async (customCode?: string) => {
+    if (claimingReward) return;
     setClaimingReward(true);
     setClaimError(null);
     try {
@@ -111,6 +115,7 @@ export default function InvestigationRoomClient({
 
   const handleSolveClue = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (solving) return;
     if (!answerInput.trim() || !currentClue) return;
 
     setSolving(true);
@@ -166,6 +171,7 @@ export default function InvestigationRoomClient({
   };
 
   const handleUnlockHint = async (stageOrder: number) => {
+    if (hintLoading) return;
     setHintLoading(true);
     try {
       const res = await fetch(`/api/investigations/${investigation._id}/hint`, {
@@ -175,14 +181,27 @@ export default function InvestigationRoomClient({
       });
       const json = await res.json();
       if (!json.success) {
-        alert(json.error || "Failed to unlock hint.");
+        toast({
+          title: "Hint Unlock Failed",
+          description: json.error || "Failed to unlock hint.",
+          variant: "destructive",
+        });
         return;
       }
 
       setUnlockedHints((prev) => ({ ...prev, [stageOrder]: json.data.hintText }));
       setUserCoins(json.data.coinsRemaining);
+      toast({
+        title: "Hint Decrypted",
+        description: "Tactical hint revealed for this investigation stage.",
+        variant: "cyber",
+      });
     } catch (e: any) {
-      alert(e.message);
+      toast({
+        title: "Network Error",
+        description: e.message || "Failed to communicate with investigation server.",
+        variant: "destructive",
+      });
     } finally {
       setHintLoading(false);
     }
@@ -204,14 +223,27 @@ export default function InvestigationRoomClient({
 
       const json = await res.json();
       if (!json.success) {
-        alert(json.error || "Failed to upload photo");
+        toast({
+          title: "Upload Failed",
+          description: json.error || "Failed to upload photo",
+          variant: "destructive",
+        });
         return;
       }
 
       setEvidencePhotoUrl(json.url);
       setEvidenceType("PHOTO");
+      toast({
+        title: "Photo Uploaded",
+        description: "Visual evidence attached to docket.",
+        variant: "success",
+      });
     } catch (err: any) {
-      alert(err.message || "Upload error");
+      toast({
+        title: "Upload Error",
+        description: err.message || "Failed to upload image",
+        variant: "destructive",
+      });
     } finally {
       setUploadingPhoto(false);
     }
@@ -245,9 +277,18 @@ export default function InvestigationRoomClient({
         setEvidenceContent("");
         setEvidencePhotoUrl("");
         setShowEvidenceModal(false);
+        toast({
+          title: "Evidence Node Logged",
+          description: "New intelligence added to the investigation board.",
+          variant: "success",
+        });
       }
     } catch (e: any) {
-      alert(e.message);
+      toast({
+        title: "Submission Error",
+        description: e.message || "Failed to submit evidence node.",
+        variant: "destructive",
+      });
     } finally {
       setSubmittingEvidence(false);
     }
@@ -322,6 +363,34 @@ export default function InvestigationRoomClient({
         </div>
       </div>
 
+      {/* Completion Notification Banner */}
+      {investigation.status === "COMPLETED" && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-cyan-950/60 border border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.15)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                <span>CASE FILE SOLVED & REWARDS DISTRIBUTED</span>
+                <span className="text-[10px] uppercase px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">ARCHIVED</span>
+              </h2>
+              <p className="text-xs text-slate-300 mt-0.5">
+                All clues and verification requirements have been completed. Multi-entry is blocked.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/quests"
+              className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-1.5 shadow-lg shadow-cyan-500/20"
+            >
+              <span>Next Quest Board →</span>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Main 3-Column Corkboard Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Clue Chain & Active Stage Solver */}
@@ -390,10 +459,19 @@ export default function InvestigationRoomClient({
                             type="button"
                             onClick={() => handleUnlockHint(clue.stageOrder)}
                             disabled={hintLoading}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-mono text-amber-400 hover:text-amber-300"
+                            className="inline-flex items-center gap-1.5 text-[11px] font-mono text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                           >
-                            <HelpCircle className="w-3.5 h-3.5" />
-                            Unlock Hint (-{clue.hintCoinCost || 10} Coins)
+                            {hintLoading ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Decrypting Clue Hint...</span>
+                              </>
+                            ) : (
+                              <>
+                                <HelpCircle className="w-3.5 h-3.5" />
+                                <span>Unlock Hint (-{clue.hintCoinCost || 10} Coins)</span>
+                              </>
+                            )}
                           </button>
                         )}
                       </div>
@@ -428,10 +506,19 @@ export default function InvestigationRoomClient({
                 <button
                   type="submit"
                   disabled={solving}
-                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs font-mono flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20"
+                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs font-mono flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
                 >
-                  <Send className="w-3.5 h-3.5" />
-                  {solving ? "Verifying with Campus Ledger..." : "Submit Clue Answer"}
+                  {solving ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Verifying with Campus Ledger...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Submit Clue Answer</span>
+                    </>
+                  )}
                 </button>
               </form>
 
@@ -780,10 +867,19 @@ export default function InvestigationRoomClient({
                   type="button"
                   onClick={() => handleClaimRecovery()}
                   disabled={claimingReward}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-2"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
                 >
-                  <Award className="w-4 h-4" />
-                  {claimingReward ? "Submitting..." : "Submit Verification"}
+                  {claimingReward ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Settling Handover Ledger...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Award className="w-4 h-4" />
+                      <span>Submit Verification</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -825,17 +921,23 @@ export default function InvestigationRoomClient({
 
             <div className="flex flex-col gap-2 pt-2">
               <Link
+                href="/quests"
+                className="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all text-center flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/25"
+              >
+                <span>Find Next Quest →</span>
+              </Link>
+              <Link
                 href="/dashboard"
-                className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all text-center"
+                className="w-full py-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 font-bold text-xs font-mono transition-all text-center"
               >
                 Return to Investigator HQ
               </Link>
               <button
                 type="button"
                 onClick={() => setClaimResult(null)}
-                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-all"
+                className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-all"
               >
-                Close & Review Board
+                Close & Review Case File
               </button>
             </div>
           </div>

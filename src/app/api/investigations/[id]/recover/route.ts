@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { Types } from "mongoose";
+import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import {
@@ -22,7 +23,7 @@ import {
 const RecoverSchema = z.object({
   handoverCode: z.string().length(6).optional(),
   recoveryNotes: z.string().max(1000).optional(),
-  photoUrl: z.string().url().or(z.string().startsWith("/uploads/")).optional(),
+  photoUrl: z.string().url().or(z.string().startsWith("/api/evidence/")).or(z.string().startsWith("/uploads/")).optional(),
 });
 
 export async function POST(
@@ -46,6 +47,29 @@ export async function POST(
       return NextResponse.json(
         { success: false, error: { code: "NOT_FOUND", message: "Investigation not found." } },
         { status: 404 }
+      );
+    }
+
+    // Authorize caller: must be owner, registered participant, squad mate, or staff
+    const callerId = user._id.toString();
+    const isOwner = investigation.userId?.toString() === callerId;
+    const isParticipant =
+      isOwner ||
+      investigation.participatingUserIds?.some((p: any) => p.toString() === callerId) ||
+      (investigation.squadId && user.squadId && investigation.squadId.toString() === user.squadId.toString()) ||
+      user.role === "ADMIN" ||
+      user.role === "MODERATOR";
+
+    if (!isParticipant) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "FORBIDDEN",
+            message: "You are not authorized to claim recovery for this investigation.",
+          },
+        },
+        { status: 403 }
       );
     }
 
@@ -107,9 +131,16 @@ export async function POST(
         const claim = await ClaimRequest.findOne({
           itemId: lostItem?._id,
           status: "APPROVED",
-        }).select("+handoverCode");
+        }).select("+handoverCode +handoverCodeHash");
 
-        if (!claim || claim.handoverCode !== handoverCode.trim()) {
+        let isMatch = false;
+        if (claim?.handoverCodeHash) {
+          isMatch = await bcrypt.compare(handoverCode.trim(), claim.handoverCodeHash);
+        } else if (claim?.handoverCode) {
+          isMatch = claim.handoverCode === handoverCode.trim();
+        }
+
+        if (!claim || !isMatch) {
           return NextResponse.json(
             {
               success: false,

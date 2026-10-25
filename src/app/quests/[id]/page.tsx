@@ -15,7 +15,9 @@ import {
   CheckCircle2,
   Lock,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function QuestBriefingPage() {
   const params = useParams();
@@ -42,7 +44,10 @@ export default function QuestBriefingPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const { toast } = useToast();
+
   const handleStart = async (asSquad: boolean) => {
+    if (deploying) return;
     setDeploying(true);
     try {
       const res = await fetch(`/api/quests/${id}/start`, {
@@ -52,12 +57,25 @@ export default function QuestBriefingPage() {
       });
       const json = await res.json();
       if (json.success && json.data?.investigationId) {
+        toast({
+          title: "Investigation Initialized",
+          description: "Entering live field telemetry room...",
+          variant: "success",
+        });
         router.push(`/investigations/${json.data.investigationId}`);
       } else {
-        alert(json.error || "Please log in.");
+        toast({
+          title: "Quest Activation Failed",
+          description: json.error || "Please log in to accept this quest.",
+          variant: "destructive",
+        });
       }
     } catch (e: any) {
-      alert(e.message);
+      toast({
+        title: "Connection Error",
+        description: e.message || "Failed to initiate quest",
+        variant: "destructive",
+      });
     } finally {
       setDeploying(false);
     }
@@ -109,7 +127,25 @@ export default function QuestBriefingPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {investigation ? (
+            {investigation?.status === "COMPLETED" || quest.isCompletedByUser ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {investigation && (
+                  <Link
+                    href={`/investigations/${investigation._id}`}
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-emerald-500/30 font-bold text-xs font-mono transition-all flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Review Case Dossier
+                  </Link>
+                )}
+                <Link
+                  href="/quests"
+                  className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-1.5 shadow-lg shadow-cyan-500/20"
+                >
+                  Next Available Quest →
+                </Link>
+              </div>
+            ) : investigation ? (
               <Link
                 href={`/investigations/${investigation._id}`}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs font-mono shadow-lg shadow-emerald-500/20"
@@ -119,24 +155,60 @@ export default function QuestBriefingPage() {
             ) : (
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => handleStart(false)}
                   disabled={deploying}
-                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all"
+                  className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                 >
-                  {deploying ? "Deploying..." : "Start Solo Recon"}
+                  {deploying ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deploying Recon...</span>
+                    </>
+                  ) : (
+                    <span>Start Solo Recon</span>
+                  )}
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleStart(true)}
                   disabled={deploying}
-                  className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-1.5"
+                  className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                 >
-                  <Users className="w-3.5 h-3.5" />
-                  Squad Raid
+                  {deploying ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deploying Squad...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Squad Raid</span>
+                    </>
+                  )}
                 </button>
               </div>
             )}
           </div>
         </div>
+
+        {(investigation?.status === "COMPLETED" || quest.isCompletedByUser) && (
+          <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_20px_rgba(16,185,129,0.15)]">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div>
+                <span className="font-bold text-white text-sm block">Mission Completed & Rewards Credited</span>
+                <span className="text-slate-300">You have solved all clues and claimed honors for this investigation. Multi-entry is blocked.</span>
+              </div>
+            </div>
+            <Link
+              href="/quests"
+              className="px-3.5 py-2 rounded-xl bg-emerald-500 text-slate-950 font-bold text-xs text-center whitespace-nowrap hover:bg-emerald-400 transition-colors"
+            >
+              Next Available Quest →
+            </Link>
+          </div>
+        )}
 
         <div className="space-y-4">
           <div className="text-xs font-mono text-slate-400 uppercase">Mission Objective</div>

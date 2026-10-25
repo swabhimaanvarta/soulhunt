@@ -4,6 +4,12 @@ import { User } from "@/models";
 import { signSessionToken } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
+  if (process.env.NODE_ENV === "production" || process.env.ENABLE_DEMO_LOGIN !== "true") {
+    return NextResponse.json(
+      { success: false, error: { code: "FORBIDDEN", message: "Demo authentication is disabled." } },
+      { status: 403 }
+    );
+  }
   try {
     const { roleOrEmail } = await req.json();
     await connectDB();

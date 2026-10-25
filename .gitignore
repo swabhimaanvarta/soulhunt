@@ -3,7 +3,10 @@ node_modules/
 
 # Next.js build
 .next/
+.next_build/
+.next_prod/
 out/
+src/screenshots/
 
 # Database files
 data/

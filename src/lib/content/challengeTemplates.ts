@@ -20,7 +20,7 @@ export interface QuestTemplate {
   title: string;
   description: string;
   theme: string;
-  questType: "CAMPUS_TREASURE" | "DAILY_HUNT" | "MYSTERY" | "LEGENDARY" | "SQUAD_HUNT";
+  questType: "CAMPUS_TREASURE" | "DAILY_HUNT" | "MYSTERY" | "LEGENDARY" | "SQUAD_HUNT" | "QUICK_FIND" | "INVESTIGATION";
   difficulty: number;
   locationCode: string; // matches CampusLocation.code e.g. "BLK-A", "LIB-01"
   xpReward: number;
@@ -244,6 +244,6 @@ export function getRandomChallengeTemplate(
   }
 
   const index = Math.floor(Math.random() * filtered.length);
-  return filtered[index];
+  return JSON.parse(JSON.stringify(filtered[index]));
 }
 

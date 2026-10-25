@@ -19,6 +19,24 @@ import {
 } from "../models";
 
 export async function runSeed() {
+  const uri = process.env.MONGODB_URI || "";
+  const isProd =
+    process.env.NODE_ENV === "production" ||
+    uri.toLowerCase().includes("prod") ||
+    uri.toLowerCase().includes("atlas");
+
+  if (isProd || process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
+    const errorMsg =
+      "🛑 SAFETY ABORT: Destructive seed is disabled by default to prevent accidental data loss. " +
+      "Set ALLOW_DESTRUCTIVE_SEED=true to proceed in development or testing. " +
+      "Destructive seed is strictly forbidden in production.";
+    console.error(errorMsg);
+    if (isProd) {
+      throw new Error(errorMsg);
+    }
+    return;
+  }
+
   await connectDB();
   console.log("🌱 Starting AIEM Hunt V1.0 Deterministic Database Seed...");
 
@@ -42,7 +60,7 @@ export async function runSeed() {
 
   await SystemConfig.create({
     key: "GLOBAL_CONFIG",
-    allowedEmailDomains: ["@student.aiem.edu", "@aiem.edu"],
+    allowedEmailDomains: ["@aiemgoa.ac.in", "@aitdgoa.edu.in"],
     xpPerLevelBase: 250,
     xpLevelMultiplier: 1.2,
     defaultFinderBonusPct: 15,
@@ -58,96 +76,135 @@ export async function runSeed() {
 
   const locations = await CampusLocation.insertMany([
     {
-      name: "Block A — Main Admin & CSE",
-      code: "BLK-A",
+      name: "Admin & BSH Complex",
+      code: "BLK-ADMIN",
       zoneType: "ACADEMIC_BLOCK",
-      description: "Main administrative offices, seminar hall, and CSE labs.",
-      coordinates: { lat: 22.9868, lng: 88.4312, mapX: 25, mapY: 30 },
-      floors: ["Ground Floor", "1st Floor", "2nd Floor", "3rd Floor"],
-      isSafeDesk: false,
-    },
-    {
-      name: "Block B — Electronics & Microprocessor Labs",
-      code: "BLK-B",
-      zoneType: "ACADEMIC_BLOCK",
-      description: "ECE/EE department, VLSI lab, and Room B-204 Digital Lab.",
-      coordinates: { lat: 22.9874, lng: 88.4321, mapX: 52, mapY: 28 },
+      description: "Administration, Examination Cell, Principal's Office, and Basic Sciences & Humanities Department.",
+      coordinates: { lat: 15.5975, lng: 73.7943, mapX: 28, mapY: 16 },
       floors: ["Ground Floor", "1st Floor", "2nd Floor"],
       isSafeDesk: false,
     },
     {
-      name: "Block C — Mechanical Workshop & CAD Studio",
-      code: "BLK-C",
+      name: "Computer Engineering & AI Center",
+      code: "COMP-AI",
       zoneType: "ACADEMIC_BLOCK",
-      description: "Heavy machinery bay, robotics arena, and drafting halls.",
-      coordinates: { lat: 22.9881, lng: 88.4329, mapX: 78, mapY: 35 },
+      description: "High-Performance Computing, AI/ML Labs, Cloud Computing Systems, and Room B-204 Digital Systems Lab.",
+      coordinates: { lat: 15.5979, lng: 73.7940, mapX: 18, mapY: 23 },
+      floors: ["Ground Floor", "1st Floor", "2nd Floor"],
+      isSafeDesk: false,
+    },
+    {
+      name: "Mechanical Workshop & Robotics Bay",
+      code: "MECH-ROBOT",
+      zoneType: "ACADEMIC_BLOCK",
+      description: "Automation workshops, CAD/CAM Lab, Robotics Arena, and CNC Machining Bay.",
+      coordinates: { lat: 15.5982, lng: 73.7948, mapX: 14, mapY: 34 },
       floors: ["Ground Floor", "1st Floor"],
       isSafeDesk: false,
     },
     {
-      name: "Central Library & Archives",
-      code: "LIB-01",
+      name: "Central Library & Digital Repository",
+      code: "LIB-CENTRAL",
       zoneType: "LIBRARY",
-      description: "Three-tier reading hall, Section 823 fiction stacks, and digital archive.",
-      coordinates: { lat: 22.9869, lng: 88.4318, mapX: 45, mapY: 55 },
-      floors: ["Ground Reading Room", "1st Floor Stacks", "2nd Floor Archive"],
+      description: "Admin Block 2nd Floor — 400 sq. m open-access library, digital IEEE/NPTEL repository, and quiet study alcoves.",
+      coordinates: { lat: 15.5976, lng: 73.7945, mapX: 33, mapY: 22 },
+      floors: ["2nd Floor Reading Hall", "Digital Wing"],
       isSafeDesk: false,
     },
     {
-      name: "Main Campus Canteen",
-      code: "CNT-01",
+      name: "Campus Cafeteria & Garden Courtyard",
+      code: "CANTEEN-01",
       zoneType: "CANTEEN",
-      description: "Student dining hub and outdoor courtyard.",
-      coordinates: { lat: 22.9862, lng: 88.4325, mapX: 65, mapY: 68 },
+      description: "Student dining hub, shaded outdoor seating, and terrace patio.",
+      coordinates: { lat: 15.5968, lng: 73.7946, mapX: 34, mapY: 48 },
       floors: ["Ground Floor", "Terrace"],
       isSafeDesk: false,
     },
     {
-      name: "Student Activity Center (SAC)",
-      code: "SAC-01",
+      name: "Sports Ground & Athletic Arena",
+      code: "SPORTS-ARENA",
       zoneType: "SPORTS",
-      description: "Club rooms, music studio, and indoor table tennis arena.",
-      coordinates: { lat: 22.9859, lng: 88.4315, mapX: 30, mapY: 72 },
+      description: "Football pitch, basketball and badminton courts, and outdoor athletic field.",
+      coordinates: { lat: 15.5962, lng: 73.7952, mapX: 76, mapY: 60 },
+      floors: ["Open Ground"],
+      isSafeDesk: false,
+    },
+    {
+      name: "Main Gate Security & Safe-Desk Locker #1",
+      code: "SAFE-GATE",
+      zoneType: "SAFE_DESK",
+      description: "Assagao Main Entrance — 24/7 guarded security desk, visitor registration, and locked item deposit vaults.",
+      coordinates: { lat: 15.5960, lng: 73.7930, mapX: 47, mapY: 13 },
+      floors: ["Ground Checkpoint"],
+      isSafeDesk: true,
+      operatingHours: "24/7 Guarded Station",
+    },
+    {
+      name: "Central Library Custody Safe-Desk #2",
+      code: "SAFE-LIB",
+      zoneType: "SAFE_DESK",
+      description: "Supervised handover counter at the Central Library entrance (Admin Block 2nd Floor).",
+      coordinates: { lat: 15.5976, lng: 73.7945, mapX: 33, mapY: 20 },
+      floors: ["2nd Floor Entrance"],
+      isSafeDesk: true,
+      operatingHours: "08:30 AM - 06:30 PM",
+    },
+    {
+      name: "Electronics & Computer Engineering (G-Block)",
+      code: "ECE-G",
+      zoneType: "ACADEMIC_BLOCK",
+      description: "Embedded Systems, IoT Testbed, VLSI Design Lab, and G-Block Lecture Theatres.",
+      coordinates: { lat: 15.5971, lng: 73.7938, mapX: 26, mapY: 33 },
       floors: ["Ground Floor", "1st Floor"],
       isSafeDesk: false,
     },
     {
-      name: "Main Gate Security Safe-Desk",
-      code: "SAFE-GATE",
-      zoneType: "SAFE_DESK",
-      description: "24/7 verified campus lost & found custody lockers.",
-      coordinates: { lat: 22.9855, lng: 88.4305, mapX: 15, mapY: 85 },
-      floors: ["Ground Floor"],
-      isSafeDesk: true,
-      operatingHours: "24/7 Open",
-    },
-    {
-      name: "Central Library Help Safe-Desk",
-      code: "SAFE-LIB",
-      zoneType: "SAFE_DESK",
-      description: "Supervised handover counter at the Central Library entrance.",
-      coordinates: { lat: 22.9870, lng: 88.4319, mapX: 48, mapY: 58 },
-      floors: ["Ground Floor"],
-      isSafeDesk: true,
-      operatingHours: "08:30 AM - 07:00 PM",
+      name: "Multi-Purpose Hall & Campus Auditorium",
+      code: "AUD-MPH",
+      zoneType: "ACADEMIC_BLOCK",
+      description: "Major campus events, hackathons, seminars, and cultural festivals hall.",
+      coordinates: { lat: 15.5965, lng: 73.7935, mapX: 36, mapY: 78 },
+      floors: ["Ground Floor", "Balcony"],
+      isSafeDesk: false,
     },
   ]);
 
-  const [blkA, blkB, blkC, library, canteen, sac, safeGate, safeLib] = locations;
+  const [blkA, blkB, blkC, library, canteen, sac, safeGate, safeLib, eceG, audMph] = locations;
 
-  const adminHash = await bcrypt.hash("Admin@123", 12);
-  const modHash = await bcrypt.hash("Mod@123", 12);
-  const hunterHash = await bcrypt.hash("Hunter@123", 12);
+  const defaultAdminPass = process.env.DEFAULT_ADMIN_PASSWORD;
+  if (!defaultAdminPass) {
+    throw new Error(
+      "🛑 SECURITY VIOLATION: DEFAULT_ADMIN_PASSWORD is required in environment variables before seeding. Hardcoded fallbacks are strictly prohibited."
+    );
+  }
+  const defaultModPass = process.env.DEFAULT_MOD_PASSWORD;
+  if (!defaultModPass) {
+    throw new Error(
+      "🛑 SECURITY VIOLATION: DEFAULT_MOD_PASSWORD is required in environment variables before seeding. Hardcoded fallbacks are strictly prohibited."
+    );
+  }
+  const defaultHunterPass = process.env.DEFAULT_HUNTER_PASSWORD;
+  if (!defaultHunterPass) {
+    throw new Error(
+      "🛑 SECURITY VIOLATION: DEFAULT_HUNTER_PASSWORD is required in environment variables before seeding. Hardcoded fallbacks are strictly prohibited."
+    );
+  }
+
+  const adminHash = await bcrypt.hash(defaultAdminPass, 12);
+  const modHash = await bcrypt.hash(defaultModPass, 12);
+  const hunterHash = await bcrypt.hash(defaultHunterPass, 12);
 
   const [adminUser, modUser, rahul, vishnu, aryan, priya] = await User.insertMany([
     {
-      email: "admin@aiem.edu",
+      email: "admin@aiemgoa.ac.in",
       passwordHash: adminHash,
       username: "commander_aiem",
       displayName: "Prof. S. Chatterjee (Admin)",
       department: "Administration & Security",
       yearOfStudy: 4,
       role: "ADMIN",
+      accountStatus: "ACTIVE",
+      emailVerified: true,
       xp: 5000,
       level: 20,
       rankTitle: "Grand Archivist of AIEM",
@@ -156,13 +213,15 @@ export async function runSeed() {
       trustTier: "ELITE_INVESTIGATOR",
     },
     {
-      email: "mod@aiem.edu",
+      email: "mod@aiemgoa.ac.in",
       passwordHash: modHash,
       username: "warden_sen",
       displayName: "Anirban Sen (Safe-Desk Mod)",
       department: "Campus Security & Verification",
       yearOfStudy: 4,
       role: "MODERATOR",
+      accountStatus: "ACTIVE",
+      emailVerified: true,
       xp: 3200,
       level: 13,
       rankTitle: "Senior Detective",
@@ -171,13 +230,15 @@ export async function runSeed() {
       trustTier: "ELITE_INVESTIGATOR",
     },
     {
-      email: "rahul@student.aiem.edu",
+      email: "rahul@aiemgoa.ac.in",
       passwordHash: hunterHash,
       username: "rahul_seeker",
       displayName: "Rahul Sharma",
       department: "Computer Science & Engineering",
       yearOfStudy: 3,
       role: "STUDENT",
+      accountStatus: "ACTIVE",
+      emailVerified: true,
       xp: 1850,
       level: 8,
       rankTitle: "Field Investigator",
@@ -186,13 +247,15 @@ export async function runSeed() {
       trustTier: "TRUSTED_HUNTER",
     },
     {
-      email: "vishnu@student.aiem.edu",
+      email: "vishnu@aiemgoa.ac.in",
       passwordHash: hunterHash,
       username: "vishnu_trace",
       displayName: "Vishnu Verma",
       department: "Electronics & Communication",
       yearOfStudy: 3,
       role: "STUDENT",
+      accountStatus: "ACTIVE",
+      emailVerified: true,
       xp: 1620,
       level: 7,
       rankTitle: "Field Investigator",
@@ -201,13 +264,15 @@ export async function runSeed() {
       trustTier: "TRUSTED_HUNTER",
     },
     {
-      email: "aryan@student.aiem.edu",
+      email: "aryan@aiemgoa.ac.in",
       passwordHash: hunterHash,
       username: "aryan_falcon",
       displayName: "Aryan Das",
       department: "Mechanical Engineering",
       yearOfStudy: 2,
       role: "STUDENT",
+      accountStatus: "ACTIVE",
+      emailVerified: true,
       xp: 1390,
       level: 6,
       rankTitle: "Field Investigator",
@@ -216,13 +281,15 @@ export async function runSeed() {
       trustTier: "TRUSTED_HUNTER",
     },
     {
-      email: "priya@student.aiem.edu",
+      email: "priya@aitdgoa.edu.in",
       passwordHash: hunterHash,
       username: "priya_cipher",
       displayName: "Priya Mukherjee",
       department: "Information Technology",
       yearOfStudy: 2,
       role: "STUDENT",
+      accountStatus: "ACTIVE",
+      emailVerified: true,
       xp: 1740,
       level: 7,
       rankTitle: "Field Investigator",
@@ -248,6 +315,36 @@ export async function runSeed() {
     { _id: { $in: [rahul._id, vishnu._id, aryan._id] } },
     { $set: { squadId: theSeekers._id } }
   );
+
+  await SquadMember.create([
+    {
+      squadId: theSeekers._id,
+      userId: rahul._id,
+      role: "LEADER",
+      squadRole: "LEADER",
+      contributedSquadXp: 850,
+      cluesSolvedForSquad: 7,
+      joinedAt: new Date(Date.now() - 30 * 24 * 3600 * 1000),
+    },
+    {
+      squadId: theSeekers._id,
+      userId: vishnu._id,
+      role: "COLEADER",
+      squadRole: "COLEADER",
+      contributedSquadXp: 400,
+      cluesSolvedForSquad: 3,
+      joinedAt: new Date(Date.now() - 20 * 24 * 3600 * 1000),
+    },
+    {
+      squadId: theSeekers._id,
+      userId: aryan._id,
+      role: "MEMBER",
+      squadRole: "MEMBER",
+      contributedSquadXp: 200,
+      cluesSolvedForSquad: 2,
+      joinedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000),
+    },
+  ]);
 
   const calcAnswerHash = await bcrypt.hash("fx991ex", 10);
   const lostCalc = await LostItem.create({
@@ -394,9 +491,15 @@ export async function runSeed() {
   console.log("✅ Seed complete! Investigation Room ID:", inv._id.toString());
 }
 
-runSeed()
-  .then(() => process.exit(0))
-  .catch((err) => {
-    console.error(err);
-    process.exit(1);
-  });
+const isDirectRun =
+  process.argv[1] &&
+  (process.argv[1].endsWith("seed.ts") || process.argv[1].endsWith("seed.js"));
+
+if (isDirectRun) {
+  runSeed()
+    .then(() => process.exit(0))
+    .catch((err) => {
+      console.error(err);
+      process.exit(1);
+    });
+}

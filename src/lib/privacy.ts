@@ -11,19 +11,46 @@ export function sanitizePublicDescription(rawText: string): {
   sanitizedText: string;
   wasRedacted: boolean;
 } {
+  if (!rawText) return { sanitizedText: "", wasRedacted: false };
+
   let wasRedacted = false;
-  const digitPattern = /\b\d{8,16}\b/g;
+
+  // Email pattern
   const emailPattern = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 
-  let sanitizedText = rawText.replace(digitPattern, () => {
-    wasRedacted = true;
-    return "[REDACTED-ID/NUMBER]";
-  });
+  // Phone numbers (Indian mobile numbers, international format, landlines)
+  const phonePattern = /(?:\+?91[-.\s]?)?[6-9]\d{9}\b|\b(?:\+?\d{1,3}[-.\s]?)?\(?\d{3,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{4}\b/g;
 
-  sanitizedText = sanitizedText.replace(emailPattern, () => {
-    wasRedacted = true;
-    return "[REDACTED-EMAIL]";
-  });
+  // Student IDs / roll numbers (e.g. 23COMP042, 22MECH015, 2024CS099, AIEM/2024/CS/042)
+  const studentIdPattern = /\b(?:(?:ID|Roll(?:\s*No\.?)?)[:\s-]*)?[0-9]{2,4}[A-Z]{2,5}[0-9]{2,5}\b|\b[A-Z0-9]{2,6}\/[0-9]{4}\/[A-Z0-9\/]+\b/gi;
+
+  // Serial numbers, barcodes, long digit sequences (8-24 digits)
+  const digitPattern = /\b\d{8,24}\b/g;
+
+  // IMEI, MAC address or serial patterns like SN-12345678, IMEI: 12345...
+  const serialPattern = /\b(?:SN|IMEI|SERIAL|MAC|BARCODE)[:\s-]*[A-Z0-9-]{6,24}\b/gi;
+
+  let sanitizedText = rawText
+    .replace(emailPattern, () => {
+      wasRedacted = true;
+      return "[REDACTED-EMAIL]";
+    })
+    .replace(phonePattern, () => {
+      wasRedacted = true;
+      return "[REDACTED-PHONE]";
+    })
+    .replace(studentIdPattern, () => {
+      wasRedacted = true;
+      return "[REDACTED-STUDENT-ID]";
+    })
+    .replace(serialPattern, () => {
+      wasRedacted = true;
+      return "[REDACTED-SERIAL]";
+    })
+    .replace(digitPattern, () => {
+      wasRedacted = true;
+      return "[REDACTED-ID/NUMBER]";
+    });
 
   return { sanitizedText, wasRedacted };
 }

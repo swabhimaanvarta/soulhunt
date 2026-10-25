@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Model, Types } from "mongoose";
 
-export type UserRole = "STUDENT" | "MODERATOR" | "ADMIN";
-export type AccountStatus = "ACTIVE" | "SUSPENDED" | "DEACTIVATED";
+export type UserRole = "STUDENT" | "SAFE_DESK_STAFF" | "MODERATOR" | "ADMIN";
+export type AccountStatus = "ACTIVE" | "PENDING_VERIFICATION" | "SUSPENDED" | "DEACTIVATED";
 export type TrustTier =
   | "RESTRICTED"
   | "NEW_HUNTER"
@@ -74,8 +74,6 @@ const SystemConfigSchema = new Schema<ISystemConfig>(
       default: [
         "@aiemgoa.ac.in",
         "@aitdgoa.edu.in",
-        "@student.aiem.edu",
-        "@aiem.edu",
       ],
     },
     xpPerLevelBase: { type: Number, default: 250 },
@@ -118,7 +116,18 @@ export interface ICampusLocation extends Document {
   floors: string[];
   isSafeDesk: boolean;
   operatingHours: string;
+  building?: string;
+  accessibleRouteNotes?: string;
+  staffedHoursNotes?: string;
+  contactChannel?: string;
+  currentCapacity?: number;
+  assignedStaffUserIds?: Types.ObjectId[];
+  isArchived?: boolean;
+  sortOrder?: number;
+  updatedBy?: Types.ObjectId | null;
   isActive: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const CampusLocationSchema = new Schema<ICampusLocation>(
@@ -140,6 +149,15 @@ const CampusLocationSchema = new Schema<ICampusLocation>(
     floors: { type: [String], default: ["Ground Floor"] },
     isSafeDesk: { type: Boolean, default: false },
     operatingHours: { type: String, default: "08:00 AM - 06:00 PM" },
+    building: { type: String, default: "" },
+    accessibleRouteNotes: { type: String, default: "" },
+    staffedHoursNotes: { type: String, default: "" },
+    contactChannel: { type: String, default: "" },
+    currentCapacity: { type: Number, default: 50 },
+    assignedStaffUserIds: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    sortOrder: { type: Number, default: 0 },
+    updatedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    isArchived: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
@@ -154,8 +172,14 @@ export interface IUser extends Document {
   department: string;
   yearOfStudy: number;
   role: UserRole;
+  assignedStationId?: Types.ObjectId | null;
+  assignedStationIds?: Types.ObjectId[];
   accountStatus: AccountStatus;
   emailVerified: boolean;
+  emailVerificationCodeHash?: string;
+  emailVerificationExpiresAt?: Date;
+  emailVerificationAttempts?: number;
+  emailVerificationResendAfter?: Date;
   xp: number;
   level: number;
   rankTitle: string;
@@ -179,6 +203,18 @@ export interface IUser extends Document {
     treasuresFound: number;
     visitedBlocks: string[];
   };
+  bio?: string;
+  phoneNumber?: string;
+  studentId?: string;
+  preferredContactMethod?: "EMAIL" | "PHONE" | "SAFE_DESK";
+  avatarPreset?: string;
+  isProfilePublic?: boolean;
+  isLeaderboardPublic?: boolean;
+  featuredAchievementIds?: Types.ObjectId[];
+  weeklyScore?: number;
+  lastWeeklyReset?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const UserSchema = new Schema<IUser>(
@@ -188,15 +224,34 @@ const UserSchema = new Schema<IUser>(
     username: { type: String, required: true, unique: true, lowercase: true, trim: true },
     displayName: { type: String, required: true, trim: true },
     avatarUrl: { type: String, default: "/avatars/default-hunter.png" },
+    avatarPreset: { type: String, default: "recon" },
+    bio: { type: String, default: "", maxlength: 300 },
+    phoneNumber: { type: String, default: "", trim: true },
+    studentId: { type: String, default: "", trim: true, uppercase: true },
+    preferredContactMethod: {
+      type: String,
+      enum: ["EMAIL", "PHONE", "SAFE_DESK"],
+      default: "SAFE_DESK",
+    },
     department: { type: String, default: "Computer Science & Engineering" },
     yearOfStudy: { type: Number, default: 2 },
-    role: { type: String, enum: ["STUDENT", "MODERATOR", "ADMIN"], default: "STUDENT" },
+    role: {
+      type: String,
+      enum: ["STUDENT", "SAFE_DESK_STAFF", "MODERATOR", "ADMIN"],
+      default: "STUDENT",
+    },
+    assignedStationId: { type: Schema.Types.ObjectId, ref: "CampusLocation", default: null },
+    assignedStationIds: [{ type: Schema.Types.ObjectId, ref: "CampusLocation" }],
     accountStatus: {
       type: String,
-      enum: ["ACTIVE", "SUSPENDED", "DEACTIVATED"],
-      default: "ACTIVE",
+      enum: ["ACTIVE", "PENDING_VERIFICATION", "SUSPENDED", "DEACTIVATED"],
+      default: "PENDING_VERIFICATION",
     },
-    emailVerified: { type: Boolean, default: true },
+    emailVerified: { type: Boolean, default: false },
+    emailVerificationCodeHash: { type: String, select: false },
+    emailVerificationExpiresAt: { type: Date },
+    emailVerificationAttempts: { type: Number, default: 0 },
+    emailVerificationResendAfter: { type: Date },
     xp: { type: Number, default: 0, index: true },
     level: { type: Number, default: 1 },
     rankTitle: { type: String, default: "Rookie Scout" },
@@ -230,6 +285,11 @@ const UserSchema = new Schema<IUser>(
       treasuresFound: { type: Number, default: 0 },
       visitedBlocks: { type: [String], default: [] },
     },
+    isProfilePublic: { type: Boolean, default: true },
+    isLeaderboardPublic: { type: Boolean, default: false },
+    featuredAchievementIds: [{ type: Schema.Types.ObjectId, ref: "Achievement" }],
+    weeklyScore: { type: Number, default: 0 },
+    lastWeeklyReset: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
@@ -259,6 +319,8 @@ export interface ILostItem extends Document {
     note: string;
     timestamp: Date;
   }[];
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const LostItemSchema = new Schema<ILostItem>(
@@ -328,6 +390,8 @@ const LostItemSchema = new Schema<ILostItem>(
   },
   { timestamps: true }
 );
+LostItemSchema.index({ createdAt: -1, _id: -1 });
+LostItemSchema.index({ category: 1, status: 1, createdAt: -1 });
 
 export interface IFoundItem extends Document {
   finderId: Types.ObjectId;
@@ -356,6 +420,8 @@ export interface IFoundItem extends Document {
     note: string;
     timestamp: Date;
   }[];
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const FoundItemSchema = new Schema<IFoundItem>(
@@ -442,6 +508,8 @@ const FoundItemSchema = new Schema<IFoundItem>(
   },
   { timestamps: true }
 );
+FoundItemSchema.index({ createdAt: -1, _id: -1 });
+FoundItemSchema.index({ category: 1, status: 1, createdAt: -1 });
 
 export interface IClaimRequest extends Document {
   itemType: "LOST" | "FOUND";
@@ -451,8 +519,14 @@ export interface IClaimRequest extends Document {
   submittedAnswer: string;
   proofPhotoUrl?: string;
   notes: string;
-  handoverCode: string;
-  status: "PENDING" | "APPROVED" | "HANDOVER_COMPLETE" | "REJECTED" | "DISPUTED";
+  handoverCode?: string;
+  handoverCodeHash?: string;
+  handoverCodeExpiresAt?: Date;
+  handoverAttempts: number;
+  handoverLocked: boolean;
+  settlementIdempotencyKey?: string;
+  settlementStatus?: "PENDING" | "COMPLETED" | "FAILED_RETRYABLE";
+  status: "PENDING" | "APPROVED" | "HANDOVER_COMPLETE" | "REJECTED" | "DISPUTED" | "LOCKED";
   reviewedBy?: Types.ObjectId | null;
   reviewedAt?: Date | null;
 }
@@ -466,10 +540,20 @@ const ClaimRequestSchema = new Schema<IClaimRequest>(
     submittedAnswer: { type: String, required: true },
     proofPhotoUrl: { type: String, default: "" },
     notes: { type: String, default: "" },
-    handoverCode: { type: String, required: true, select: false },
+    handoverCode: { type: String, select: false },
+    handoverCodeHash: { type: String, select: false },
+    handoverCodeExpiresAt: { type: Date },
+    handoverAttempts: { type: Number, default: 0 },
+    handoverLocked: { type: Boolean, default: false },
+    settlementIdempotencyKey: { type: String, sparse: true, index: true },
+    settlementStatus: {
+      type: String,
+      enum: ["PENDING", "COMPLETED", "FAILED_RETRYABLE"],
+      default: null,
+    },
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "HANDOVER_COMPLETE", "REJECTED", "DISPUTED"],
+      enum: ["PENDING", "APPROVED", "HANDOVER_COMPLETE", "REJECTED", "DISPUTED", "LOCKED"],
       default: "PENDING",
     },
     reviewedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
@@ -497,11 +581,20 @@ export interface IQuest extends Document {
   finderBonusXp: number;
   maxCompletions: number;
   currentCompletions: number;
-  status: "ACTIVE" | "COMPLETED" | "EXPIRED" | "DRAFT";
+  status: "ACTIVE" | "COMPLETED" | "EXPIRED" | "DRAFT" | "ARCHIVED";
+  isArchived?: boolean;
+  revisions?: {
+    editedBy: Types.ObjectId;
+    editedByName: string;
+    note: string;
+    timestamp: Date;
+  }[];
   expiresAt?: Date | null;
   generationSource?: "AI" | "TEMPLATE" | "ADMIN";
   dailyDate?: string | null;
   theme?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const QuestSchema = new Schema<IQuest>(
@@ -551,10 +644,19 @@ const QuestSchema = new Schema<IQuest>(
     theme: { type: String, default: "" },
     status: {
       type: String,
-      enum: ["ACTIVE", "COMPLETED", "EXPIRED", "DRAFT"],
+      enum: ["ACTIVE", "COMPLETED", "EXPIRED", "DRAFT", "ARCHIVED"],
       default: "ACTIVE",
       index: true,
     },
+    isArchived: { type: Boolean, default: false, index: true },
+    revisions: [
+      {
+        editedBy: { type: Schema.Types.ObjectId, ref: "User" },
+        editedByName: { type: String, default: "" },
+        note: { type: String, default: "" },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
     expiresAt: { type: Date, default: null },
   },
   { timestamps: true }
@@ -628,6 +730,7 @@ export interface IInvestigation extends Document {
   }[];
   failedAttemptsCount: number;
   cooldownUntil?: Date | null;
+  unlockedHintStages: number[];
   status: "IN_PROGRESS" | "READY_FOR_RECOVERY" | "SUBMITTED_FOR_VERIFICATION" | "COMPLETED";
 }
 
@@ -640,6 +743,7 @@ const InvestigationSchema = new Schema<IInvestigation>(
     currentStage: { type: Number, default: 1 },
     progressPct: { type: Number, default: 0 },
     participatingUserIds: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    unlockedHintStages: { type: [Number], default: [] },
     solvedClues: [
       {
         clueId: { type: Schema.Types.ObjectId, ref: "Clue" },
@@ -679,6 +783,8 @@ const InvestigationSchema = new Schema<IInvestigation>(
   { timestamps: true }
 );
 
+export type SquadRole = "LEADER" | "COLEADER" | "ELDER" | "MEMBER" | "OFFICER";
+
 export interface ISquad extends Document {
   name: string;
   tag: string;
@@ -691,6 +797,11 @@ export interface ISquad extends Document {
   squadLevel: number;
   completedHuntsCount: number;
   memberCap: number;
+  tags?: string[];
+  weeklyScore?: number;
+  lastWeeklyReset?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const SquadSchema = new Schema<ISquad>(
@@ -710,6 +821,12 @@ const SquadSchema = new Schema<ISquad>(
     squadLevel: { type: Number, default: 1 },
     completedHuntsCount: { type: Number, default: 0 },
     memberCap: { type: Number, default: 8 },
+    tags: {
+      type: [String],
+      default: ["Casual", "Quest-focused"],
+    },
+    weeklyScore: { type: Number, default: 0 },
+    lastWeeklyReset: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
@@ -717,8 +834,8 @@ const SquadSchema = new Schema<ISquad>(
 export interface ISquadMember extends Document {
   squadId: Types.ObjectId;
   userId: Types.ObjectId;
-  role: "LEADER" | "OFFICER" | "MEMBER";
-  squadRole?: "LEADER" | "OFFICER" | "MEMBER";
+  role: SquadRole;
+  squadRole?: SquadRole;
   contributedSquadXp: number;
   cluesSolvedForSquad: number;
   joinedAt: Date;
@@ -728,8 +845,16 @@ const SquadMemberSchema = new Schema<ISquadMember>(
   {
     squadId: { type: Schema.Types.ObjectId, ref: "Squad", required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
-    role: { type: String, enum: ["LEADER", "OFFICER", "MEMBER"], default: "MEMBER" },
-    squadRole: { type: String, enum: ["LEADER", "OFFICER", "MEMBER"], default: "MEMBER" },
+    role: {
+      type: String,
+      enum: ["LEADER", "COLEADER", "ELDER", "MEMBER", "OFFICER"],
+      default: "MEMBER",
+    },
+    squadRole: {
+      type: String,
+      enum: ["LEADER", "COLEADER", "ELDER", "MEMBER", "OFFICER"],
+      default: "MEMBER",
+    },
     contributedSquadXp: { type: Number, default: 0 },
     cluesSolvedForSquad: { type: Number, default: 0 },
     joinedAt: { type: Date, default: Date.now },
@@ -737,6 +862,72 @@ const SquadMemberSchema = new Schema<ISquadMember>(
   { timestamps: true }
 );
 SquadMemberSchema.index({ squadId: 1, userId: 1 }, { unique: true });
+
+export interface ISquadJoinRequest extends Document {
+  squadId: Types.ObjectId;
+  userId: Types.ObjectId;
+  status: "PENDING" | "ACCEPTED" | "DECLINED";
+  message?: string;
+  createdAt: Date;
+  reviewedAt?: Date | null;
+  reviewedBy?: Types.ObjectId | null;
+  decisionNote?: string;
+}
+
+const SquadJoinRequestSchema = new Schema<ISquadJoinRequest>(
+  {
+    squadId: { type: Schema.Types.ObjectId, ref: "Squad", required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    status: {
+      type: String,
+      enum: ["PENDING", "ACCEPTED", "DECLINED"],
+      default: "PENDING",
+      index: true,
+    },
+    message: { type: String, default: "", maxlength: 300, trim: true },
+    reviewedAt: { type: Date, default: null },
+    reviewedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    decisionNote: { type: String, default: "", maxlength: 300 },
+  },
+  { timestamps: true }
+);
+SquadJoinRequestSchema.index(
+  { squadId: 1, userId: 1 },
+  { unique: true, partialFilterExpression: { status: "PENDING" } }
+);
+
+export interface ISquadMessage extends Document {
+  squadId: Types.ObjectId;
+  senderId: Types.ObjectId;
+  text: string;
+  moderationState: "VISIBLE" | "HIDDEN" | "REMOVED";
+  moderatedBy?: Types.ObjectId | null;
+  moderationReason?: string;
+  requestId?: string;
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+const SquadMessageSchema = new Schema<ISquadMessage>(
+  {
+    squadId: { type: Schema.Types.ObjectId, ref: "Squad", required: true, index: true },
+    senderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    text: { type: String, required: true, maxlength: 1000, trim: true },
+    moderationState: {
+      type: String,
+      enum: ["VISIBLE", "HIDDEN", "REMOVED"],
+      default: "VISIBLE",
+      index: true,
+    },
+    moderatedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    moderationReason: { type: String, default: "" },
+    requestId: { type: String, sparse: true },
+    expiresAt: { type: Date, required: true },
+  },
+  { timestamps: true }
+);
+SquadMessageSchema.index({ squadId: 1, createdAt: -1, _id: -1 });
+SquadMessageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export interface IAchievement extends Document {
   code: string;
@@ -760,6 +951,9 @@ export interface IAchievement extends Document {
   threshold: number;
   xpReward: number;
   coinReward: number;
+  scope?: "PLAYER" | "SQUAD";
+  version?: number;
+  isArchived?: boolean;
   isActive: boolean;
 }
 
@@ -778,6 +972,13 @@ const AchievementSchema = new Schema<IAchievement>(
     threshold: { type: Number, required: true },
     xpReward: { type: Number, required: true },
     coinReward: { type: Number, required: true },
+    scope: {
+      type: String,
+      enum: ["PLAYER", "SQUAD"],
+      default: "PLAYER",
+    },
+    version: { type: Number, default: 1 },
+    isArchived: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
@@ -845,10 +1046,11 @@ export interface ITransaction extends Document {
   deltaCoins: number;
   deltaTrust: number;
   reason: string;
-  referenceType: "QUEST" | "RECOVERY" | "ACHIEVEMENT" | "SHOP_PURCHASE" | "HINT_UNLOCK" | "ADMIN_ADJUST";
+  referenceType: "QUEST" | "RECOVERY" | "ACHIEVEMENT" | "SHOP_PURCHASE" | "REWARD_PURCHASE" | "HINT_UNLOCK" | "ADMIN_ADJUST";
   referenceId?: Types.ObjectId | null;
   counterpartyUserId?: Types.ObjectId | null;
   approvedBy?: Types.ObjectId | null;
+  idempotencyKey?: string;
   createdAt: Date;
 }
 
@@ -867,6 +1069,7 @@ const TransactionSchema = new Schema<ITransaction>(
         "RECOVERY",
         "ACHIEVEMENT",
         "SHOP_PURCHASE",
+        "REWARD_PURCHASE",
         "HINT_UNLOCK",
         "ADMIN_ADJUST",
       ],
@@ -875,9 +1078,24 @@ const TransactionSchema = new Schema<ITransaction>(
     referenceId: { type: Schema.Types.ObjectId, default: null },
     counterpartyUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     approvedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    idempotencyKey: { type: String, unique: true, sparse: true },
   },
   { timestamps: true }
 );
+
+TransactionSchema.index({ userId: 1, referenceId: 1, referenceType: 1, reason: 1 }, { unique: true, sparse: true });
+
+export interface IRateLimitRecord extends Document {
+  key: string;
+  points: number;
+  expireAt: Date;
+}
+
+const RateLimitRecordSchema = new Schema<IRateLimitRecord>({
+  key: { type: String, required: true, unique: true },
+  points: { type: Number, default: 1 },
+  expireAt: { type: Date, required: true, expires: 0 },
+});
 
 export interface IEvent extends Document {
   title: string;
@@ -910,7 +1128,14 @@ export interface IEvent extends Document {
   };
   generationSource?: "AI" | "TEMPLATE" | "ADMIN";
   featuredBadge?: string;
-  status: "UPCOMING" | "LIVE" | "ENDED" | "CANCELLED";
+  status: "DRAFT" | "UPCOMING" | "LIVE" | "ENDED" | "CANCELLED" | "ARCHIVED";
+  isArchived?: boolean;
+  revisions?: {
+    editedBy: Types.ObjectId;
+    editedByName: string;
+    note: string;
+    timestamp: Date;
+  }[];
 }
 
 const EventSchema = new Schema<IEvent>(
@@ -958,9 +1183,18 @@ const EventSchema = new Schema<IEvent>(
     },
     status: {
       type: String,
-      enum: ["UPCOMING", "LIVE", "ENDED", "CANCELLED"],
+      enum: ["DRAFT", "UPCOMING", "LIVE", "ENDED", "CANCELLED", "ARCHIVED"],
       default: "LIVE",
     },
+    isArchived: { type: Boolean, default: false, index: true },
+    revisions: [
+      {
+        editedBy: { type: Schema.Types.ObjectId, ref: "User" },
+        editedByName: { type: String, default: "" },
+        note: { type: String, default: "" },
+        timestamp: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -1050,6 +1284,10 @@ export const Squad: Model<ISquad> =
   mongoose.models.Squad || mongoose.model<ISquad>("Squad", SquadSchema);
 export const SquadMember: Model<ISquadMember> =
   mongoose.models.SquadMember || mongoose.model<ISquadMember>("SquadMember", SquadMemberSchema);
+export const SquadJoinRequest: Model<ISquadJoinRequest> =
+  mongoose.models.SquadJoinRequest || mongoose.model<ISquadJoinRequest>("SquadJoinRequest", SquadJoinRequestSchema);
+export const SquadMessage: Model<ISquadMessage> =
+  mongoose.models.SquadMessage || mongoose.model<ISquadMessage>("SquadMessage", SquadMessageSchema);
 export const Achievement: Model<IAchievement> =
   mongoose.models.Achievement || mongoose.model<IAchievement>("Achievement", AchievementSchema);
 export const UserAchievement: Model<IUserAchievement> =
@@ -1064,3 +1302,92 @@ export const Notification: Model<INotification> =
   mongoose.models.Notification || mongoose.model<INotification>("Notification", NotificationSchema);
 export const FraudAlert: Model<IFraudAlert> =
   mongoose.models.FraudAlert || mongoose.model<IFraudAlert>("FraudAlert", FraudAlertSchema);
+export const RateLimitRecord: Model<IRateLimitRecord> =
+  mongoose.models.RateLimitRecord || mongoose.model<IRateLimitRecord>("RateLimitRecord", RateLimitRecordSchema);
+
+export interface IEvidenceRecord extends Document {
+  filename: string;
+  uploadedBy: Types.ObjectId;
+  createdAt: Date;
+}
+
+const EvidenceRecordSchema = new Schema<IEvidenceRecord>(
+  {
+    filename: { type: String, required: true, unique: true, index: true },
+    uploadedBy: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  },
+  { timestamps: true }
+);
+
+export const EvidenceRecord: Model<IEvidenceRecord> =
+  mongoose.models.EvidenceRecord || mongoose.model<IEvidenceRecord>("EvidenceRecord", EvidenceRecordSchema);
+
+export interface IAuditEvent extends Document {
+  actorId: Types.ObjectId;
+  actorName: string;
+  actorRole: UserRole;
+  action: string;
+  targetType: "CLAIM" | "LOST_ITEM" | "FOUND_ITEM" | "QUEST" | "EVENT" | "LOCATION" | "USER" | "CONFIG" | "FRAUD_ALERT" | "REWARD" | "TRANSACTION" | "SQUAD" | "ACHIEVEMENT";
+  targetId?: Types.ObjectId | null;
+  targetLabel?: string;
+  reason: string;
+  beforeState?: any;
+  afterState?: any;
+  ipAddress?: string;
+  createdAt: Date;
+}
+
+const AuditEventSchema = new Schema<IAuditEvent>(
+  {
+    actorId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    actorName: { type: String, required: true },
+    actorRole: { type: String, required: true },
+    action: { type: String, required: true, index: true },
+    targetType: {
+      type: String,
+      enum: ["CLAIM", "LOST_ITEM", "FOUND_ITEM", "QUEST", "EVENT", "LOCATION", "USER", "CONFIG", "FRAUD_ALERT", "REWARD", "TRANSACTION", "SQUAD", "ACHIEVEMENT"],
+      required: true,
+      index: true,
+    },
+    targetId: { type: Schema.Types.ObjectId, default: null, index: true },
+    targetLabel: { type: String, default: "" },
+    reason: { type: String, required: true },
+    beforeState: { type: Schema.Types.Mixed, default: null },
+    afterState: { type: Schema.Types.Mixed, default: null },
+    ipAddress: { type: String, default: "" },
+  },
+  { timestamps: true }
+);
+
+AuditEventSchema.index({ createdAt: -1 });
+
+export const AuditEvent: Model<IAuditEvent> =
+  mongoose.models.AuditEvent || mongoose.model<IAuditEvent>("AuditEvent", AuditEventSchema);
+
+export interface IHintUnlock extends Document {
+  investigationId: Types.ObjectId;
+  stageOrder: number;
+  questId: Types.ObjectId;
+  unlockedByUserId: Types.ObjectId;
+  coinCost: number;
+  unlockedAt: Date;
+}
+
+const HintUnlockSchema = new Schema<IHintUnlock>(
+  {
+    investigationId: { type: Schema.Types.ObjectId, ref: "Investigation", required: true, index: true },
+    stageOrder: { type: Number, required: true },
+    questId: { type: Schema.Types.ObjectId, ref: "Quest", required: true, index: true },
+    unlockedByUserId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    coinCost: { type: Number, default: 10 },
+    unlockedAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+);
+
+HintUnlockSchema.index({ investigationId: 1, stageOrder: 1 }, { unique: true });
+
+export const HintUnlock: Model<IHintUnlock> =
+  mongoose.models.HintUnlock || mongoose.model<IHintUnlock>("HintUnlock", HintUnlockSchema);
+
+

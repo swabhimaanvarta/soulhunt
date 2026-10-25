@@ -1,16 +1,38 @@
 import { SignJWT, jwtVerify } from "jose";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "aiem-hunt-super-secret-jwt-key-change-in-production-2026"
-);
+function getSecretKey(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (process.env.NODE_ENV === "production") {
+    if (!secret || secret.length < 32) {
+      throw new Error(
+        "FATAL: Production deployment requires a high-entropy JWT_SECRET environment variable (minimum 32 characters). Refusing to start."
+      );
+    }
+    return new TextEncoder().encode(secret);
+  }
+  // In development, allow local fallback
+  return new TextEncoder().encode(secret || "aiem-hunt-local-dev-secret-key-32-chars-long-minimum!");
+}
 
-export type UserRole = "STUDENT" | "MODERATOR" | "ADMIN";
+const JWT_SECRET = getSecretKey();
+
+export type UserRole = "STUDENT" | "SAFE_DESK_STAFF" | "MODERATOR" | "ADMIN";
 
 export interface SessionPayload {
   userId: string;
   email: string;
   username: string;
   role: UserRole;
+}
+
+export function getSessionCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+    secure: process.env.NODE_ENV === "production",
+  };
 }
 
 export async function signSessionToken(payload: SessionPayload): Promise<string> {
@@ -29,4 +51,3 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     return null;
   }
 }
-

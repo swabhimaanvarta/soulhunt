@@ -30,6 +30,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const { logAuditEvent } = await import("@/lib/audit");
+    await logAuditEvent({
+      actorId: user._id,
+      actorName: user.displayName,
+      actorRole: user.role,
+      action: "FRAUD_ALERT_RESOLVED",
+      targetType: "FRAUD_ALERT",
+      targetId: alert._id,
+      targetLabel: `${alert.alertType} (${alert.severity})`,
+      reason: notes || "Audited and resolved by moderation staff.",
+      afterState: { status: alert.status, deductTrustScore },
+    });
+
     return NextResponse.json({ success: true, message: "Fraud alert updated." });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

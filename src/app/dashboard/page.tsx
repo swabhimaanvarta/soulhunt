@@ -60,6 +60,15 @@ const TRUST_COLORS: Record<string, string> = {
   CAMPUS_GUARDIAN: "text-amber-400",
 };
 
+function sanitizeSameOriginPath(url?: string | null): string {
+  if (!url) return "/dashboard";
+  const trimmed = url.trim();
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("\\")) {
+    return trimmed;
+  }
+  return "/dashboard";
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
@@ -136,6 +145,15 @@ export default function DashboardPage() {
             <p className="text-slate-400 text-sm">Welcome back, {user?.displayName}</p>
           </div>
           <div className="flex items-center gap-3">
+            {user?.username && (
+              <Link
+                href={`/profile/${user.username}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs font-mono font-bold hover:bg-emerald-500/20 transition-colors"
+              >
+                <Award className="w-3.5 h-3.5" />
+                Profile
+              </Link>
+            )}
             {notifications.filter(n => !n.isRead).length > 0 && (
               <Link href="/notifications" className="relative">
                 <Bell className="w-6 h-6 text-slate-400 hover:text-white transition-colors" />
@@ -153,7 +171,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-4 py-8 pb-36 md:pb-12 space-y-8">
         {/* Stats Grid */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
@@ -200,7 +218,7 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 animate-pulse">
                     <Sparkles className="w-3 h-3 text-amber-400" />
-                    TODAY'S DAILY MYSTERY
+                    TODAY&apos;S DAILY MYSTERY
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">
                     Rotates daily at 00:00 UTC
@@ -347,7 +365,7 @@ export default function DashboardPage() {
                 <p className="text-slate-500 text-sm text-center py-4">No notifications yet.</p>
               )}
               {notifications.map((n) => (
-                <Link key={n._id} href={n.linkUrl || "#"}
+                <Link key={n._id} href={sanitizeSameOriginPath(n.linkUrl)}
                   className={`block rounded-lg p-3 border transition-colors ${
                     n.isRead ? "border-slate-800 bg-slate-800/30" : "border-emerald-500/20 bg-emerald-500/5"
                   } hover:border-slate-600`}>

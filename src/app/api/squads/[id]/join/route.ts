@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { Squad, SquadMember, User } from "@/models";
 import { getCurrentUser } from "@/lib/auth";
+import { apiError, apiServerError } from "@/lib/api-error";
 
 export async function POST(
   req: NextRequest,
@@ -9,29 +11,49 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    if (!Types.ObjectId.isValid(id)) {
+      return apiError("INVALID_SQUAD_ID", "Invalid squad identifier.", 400);
+    }
+
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ success: false, error: "Please sign in to join a squad." }, { status: 401 });
+      return apiError("UNAUTHORIZED", "Please sign in to join a squad.", 401);
     }
 
     if (user.squadId) {
-      return NextResponse.json({ success: false, error: "You are already a member of a squad." }, { status: 400 });
+      return apiError("ALREADY_IN_SQUAD", "You are already a member of a squad.", 400);
     }
 
     await connectDB();
     const squad = await Squad.findById(id);
     if (!squad) {
-      return NextResponse.json({ success: false, error: "Squad not found" }, { status: 404 });
+      return apiError("SQUAD_NOT_FOUND", "Squad not found", 404);
     }
 
+    const memberCap = squad.memberCap || 8;
     const memberCount = await SquadMember.countDocuments({ squadId: squad._id });
-    if (memberCount >= 8) {
-      return NextResponse.json({ success: false, error: "This squad is currently full (max 8 members)." }, { status: 400 });
+    if (memberCount >= memberCap) {
+      return apiError("SQUAD_FULL", `This squad is currently full (max ${memberCap} members).`, 400);
+    }
+
+    if (squad.privacy !== "PUBLIC") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "REQUIRES_JOIN_REQUEST",
+            message: "This squad is private or invite-only. Please submit a join request for officer review.",
+          },
+          requiresJoinRequest: true,
+        },
+        { status: 403 }
+      );
     }
 
     await SquadMember.create({
       squadId: squad._id,
       userId: user._id,
+      role: "MEMBER",
       squadRole: "MEMBER",
       joinedAt: new Date(),
     });
@@ -40,7 +62,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, message: `Joined ${squad.name} successfully!` });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return apiServerError(error, "SQUAD_JOIN_FAILED", "Failed to join squad.");
   }
 }
 

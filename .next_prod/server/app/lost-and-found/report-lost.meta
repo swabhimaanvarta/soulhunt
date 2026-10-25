@@ -1,0 +1,7 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "4294967294",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/lost-and-found/layout,_N_T_/lost-and-found/report-lost/layout,_N_T_/lost-and-found/report-lost/page,_N_T_/lost-and-found/report-lost"
+  }
+}

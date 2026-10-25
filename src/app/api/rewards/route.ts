@@ -5,12 +5,26 @@ import { Reward } from "@/models";
 export async function GET() {
   try {
     await connectDB();
-    let rewards = await Reward.find({ isActive: true }).sort({ coinCost: 1 }).lean();
 
-    // If database has no rewards yet, seed default tactical items
+    // Deactivate legacy physical items if present without deleting historical purchase records
+    await Reward.updateMany(
+      { type: { $in: ["CANTEEN_COUPON", "CAMPUS_PERK"] }, isActive: true },
+      { $set: { isActive: false } }
+    );
+
+    let rewards = await Reward.find({
+      isActive: true,
+      type: { $nin: ["CANTEEN_COUPON", "CAMPUS_PERK"] },
+    })
+      .sort({ coinCost: 1 })
+      .lean();
+
+    // If database has no rewards yet, seed default tactical virtual items
     if (rewards.length === 0) {
       const defaults = [
         {
+          code: "TITLE_CAMPUS_PHANTOM",
+          name: "The Campus Phantom",
           title: "The Campus Phantom",
           description: "Exclusive title badge for discreet night investigators.",
           type: "TITLE",
@@ -21,6 +35,8 @@ export async function GET() {
           metadata: { value: "The Campus Phantom", color: "purple" },
         },
         {
+          code: "TITLE_EAGLE_EYE",
+          name: "Eagle Eye",
           title: "Eagle Eye",
           description: "Recognition for hunters with rapid clue deduction.",
           type: "TITLE",
@@ -31,6 +47,8 @@ export async function GET() {
           metadata: { value: "Eagle Eye", color: "emerald" },
         },
         {
+          code: "FRAME_OBSIDIAN_CORE",
+          name: "Obsidian Core Frame",
           title: "Obsidian Core Frame",
           description: "Dark carbon-fiber tactical avatar frame with animated border.",
           type: "FRAME",
@@ -41,6 +59,8 @@ export async function GET() {
           metadata: { value: "border-emerald-500 shadow-emerald-500/20" },
         },
         {
+          code: "FRAME_NEON_CYAN",
+          name: "Neon Cyan Holo-Frame",
           title: "Neon Cyan Holo-Frame",
           description: "Cyberpunk-inspired luminous cyan frame.",
           type: "FRAME",
@@ -51,24 +71,28 @@ export async function GET() {
           metadata: { value: "border-cyan-400 shadow-cyan-400/30" },
         },
         {
-          title: "Canteen Hot Coffee Voucher",
-          description: "Redeemable at the Main Campus Canteen counter.",
-          type: "CANTEEN_COUPON",
-          coinCost: 75,
-          minLevelRequired: 2,
-          stock: 45,
+          code: "THEME_OBSIDIAN_GRID",
+          name: "Obsidian Grid UI Theme",
+          title: "Obsidian Grid UI Theme",
+          description: "Tactical dark UI HUD with subtle neon grid overlays.",
+          type: "THEME",
+          coinCost: 200,
+          minLevelRequired: 5,
+          stock: -1,
           isActive: true,
-          metadata: { value: "AIEM-CAFE-HOT" },
+          metadata: { value: "theme-obsidian-grid" },
         },
         {
-          title: "Library Reserved Pod Pass",
-          description: "4-hour priority quiet-zone study pod reservation.",
-          type: "CAMPUS_PERK",
+          code: "BADGE_CAMPUS_HERO",
+          name: "Campus Custody Guardian Badge",
+          title: "Campus Custody Guardian Badge",
+          description: "Virtual profile crest recognizing dedicated returners of lost belongings.",
+          type: "BADGE",
           coinCost: 150,
-          minLevelRequired: 5,
-          stock: 20,
+          minLevelRequired: 4,
+          stock: -1,
           isActive: true,
-          metadata: { value: "LIB-POD-PRIORITY" },
+          metadata: { value: "badge-custody-guardian" },
         },
       ];
       rewards = (await Reward.insertMany(defaults as any)) as any;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -12,9 +12,10 @@ import {
   AlertCircle,
   Sparkles,
   UserCheck,
+  Loader2,
 } from "lucide-react";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectUrl = searchParams.get("redirect") || "/";
@@ -23,9 +24,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inFlightRef.current || loading) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
 
@@ -38,41 +42,33 @@ export default function LoginPage() {
 
       const json = await res.json();
       if (!json.success) {
+        if (json.pendingVerification) {
+          window.location.href = `/register?email=${encodeURIComponent(json.email || identifier)}&pending=true`;
+          return;
+        }
         throw new Error(json.error?.message || "Invalid credentials.");
       }
 
-      router.push(redirectUrl);
-      router.refresh();
+      // Role-aware destination: Admins go to /admin, hunters go to /dashboard unless redirectUrl was explicit
+      let destination = redirectUrl;
+      if (destination === "/" && json.data?.role === "ADMIN") {
+        destination = "/admin";
+      } else if (destination === "/") {
+        destination = "/dashboard";
+      }
+
+      window.location.href = destination;
     } catch (err: any) {
       setError(err.message || "Login failed.");
-    } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   };
 
-  const handleQuickLogin = async (roleOrEmail: string) => {
-    setLoading(true);
+  const handleQuickFill = (roleOrEmail: string) => {
+    setIdentifier(roleOrEmail);
+    setPassword("");
     setError(null);
-
-    try {
-      const res = await fetch("/api/auth/demo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ roleOrEmail }),
-      });
-
-      const json = await res.json();
-      if (!json.success) {
-        throw new Error(json.error?.message || "Quick switch failed.");
-      }
-
-      router.push(redirectUrl);
-      router.refresh();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -85,69 +81,48 @@ export default function LoginPage() {
             </div>
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Agent Authentication
+            Sign In to AIEM Hunt
           </h2>
           <p className="text-xs text-slate-400 font-mono">
-            AIEM Lost & Found • Cryptographic Recon Network
+            AIEM - Agnel Institute of Engineering and Management
           </p>
         </div>
 
-        {/* Quick Demo Personas Bar */}
-        <div className="rounded-2xl bg-slate-900/90 border border-white/10 p-4 space-y-2.5">
-          <div className="flex items-center gap-1.5 text-[11px] font-mono text-cyan-400 font-bold uppercase">
-            <UserCheck className="w-3.5 h-3.5" />
-            <span>Instant Demo Evaluation Login (1-Click)</span>
+        {/* Official College Portal Notice */}
+        <div className="rounded-2xl bg-slate-900/90 border border-emerald-500/20 p-4 space-y-1.5 text-center">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-mono text-emerald-400 font-bold tracking-wide uppercase">
+            <Shield className="w-4 h-4" />
+            <span>Official Institutional Access</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin("admin@aiem.edu")}
-              className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-left truncate transition-colors"
-            >
-              👑 Admin (Chatterjee)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickLogin("mod@aiem.edu")}
-              className="px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-left truncate transition-colors"
-            >
-              🛡️ Safe-Desk Mod (Sen)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickLogin("rahul@student.aiem.edu")}
-              className="px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-left truncate transition-colors"
-            >
-              🔍 Rahul (Squad Leader)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickLogin("priya@student.aiem.edu")}
-              className="px-2.5 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-left truncate transition-colors"
-            >
-              📱 Priya (Item Reporter)
-            </button>
-          </div>
+          <p className="text-[11px] text-slate-400 font-mono">
+            Authorized for registered students, faculty & security safe-desks with <span className="text-emerald-400 font-semibold">@aiemgoa.ac.in</span> or <span className="text-cyan-400 font-semibold">@aitdgoa.edu.in</span>.
+          </p>
         </div>
 
         {/* Main Login Form */}
-        <form onSubmit={handleLogin} className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-5">
+        <form onSubmit={handleLogin} className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-5" noValidate={false}>
           {error && (
-            <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 font-mono">
+            <div id="login-error" role="alert" className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 font-mono">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-mono text-slate-300">
+            <label htmlFor="login-identifier" className="text-xs font-mono text-slate-300">
               College Email or Username
             </label>
             <div className="relative flex items-center">
-              <User className="w-4 h-4 text-slate-400 absolute left-3.5" />
+              <User className="w-4 h-4 text-slate-400 absolute left-3.5" aria-hidden="true" />
               <input
+                id="login-identifier"
+                name="identifier"
                 type="text"
                 required
+                autoComplete="username"
+                aria-required="true"
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
                 placeholder="name@aiemgoa.ac.in or username"
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
@@ -157,12 +132,18 @@ export default function LoginPage() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-mono text-slate-300">Password</label>
+            <label htmlFor="login-password" className="text-xs font-mono text-slate-300">Password</label>
             <div className="relative flex items-center">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5" />
+              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5" aria-hidden="true" />
               <input
+                id="login-password"
+                name="password"
                 type="password"
                 required
+                autoComplete="current-password"
+                aria-required="true"
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -174,21 +155,77 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs font-mono shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs font-mono shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
           >
-            {loading ? "Authenticating..." : "Sign In to Tactical Network"}
-            <ArrowRight className="w-4 h-4" />
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Authenticating with AIEM Grid...</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In to Tactical Network</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
+
+          {/* Quick Identifier Helper */}
+          <div className="pt-2 border-t border-white/5 space-y-2">
+            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider text-center">
+              Quick Role Identifier
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickFill("rahul@aiemgoa.ac.in")}
+                className="py-1.5 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold transition-all disabled:opacity-50 disabled:pointer-events-none"
+              >
+                Student Hunter
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickFill("safedesk@aiemgoa.ac.in")}
+                className="py-1.5 px-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-[10px] font-mono font-bold transition-all disabled:opacity-50 disabled:pointer-events-none"
+              >
+                Safe-Desk Staff
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => handleQuickFill("admin@aiemgoa.ac.in")}
+                className="py-1.5 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-[10px] font-mono font-bold transition-all disabled:opacity-50 disabled:pointer-events-none"
+              >
+                Admin Control
+              </button>
+            </div>
+          </div>
 
           <div className="text-center pt-2 border-t border-white/5 text-xs text-slate-400">
             Need an AIEM Hunter account?{" "}
-            <Link href="/register" className="text-emerald-400 font-bold hover:underline">
+            <Link href="/register" prefetch={true} className="text-emerald-400 font-bold hover:underline">
               Register here
             </Link>
           </div>
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="min-h-screen bg-[#070A0F] text-slate-400 font-mono text-xs flex items-center justify-center">
+          Loading login terminal...
+        </div>
+      }
+    >
+      <LoginForm />
+    </React.Suspense>
   );
 }
 

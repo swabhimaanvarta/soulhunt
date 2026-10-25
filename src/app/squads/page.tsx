@@ -13,6 +13,7 @@ import {
   Search,
   CheckCircle2,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 
 export default function SquadsDirectoryPage() {
@@ -48,6 +49,7 @@ export default function SquadsDirectoryPage() {
 
   const handleCreateSquad = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
     setSubmitting(true);
     setError(null);
 
@@ -60,7 +62,8 @@ export default function SquadsDirectoryPage() {
 
       const json = await res.json();
       if (!json.success) {
-        throw new Error(json.error || "Failed to create squad.");
+        const errText = typeof json.error === "object" ? json.error?.message : json.error;
+        throw new Error(errText || "Failed to create squad.");
       }
 
       setShowCreateModal(false);
@@ -254,9 +257,16 @@ export default function SquadsDirectoryPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
                 >
-                  {submitting ? "Chartering..." : "Establish Squad"}
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Chartering Syndicate...</span>
+                    </>
+                  ) : (
+                    <span>Establish Squad</span>
+                  )}
                 </button>
               </div>
             </form>

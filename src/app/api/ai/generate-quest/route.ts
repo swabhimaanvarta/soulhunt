@@ -19,14 +19,17 @@ export async function POST(req: NextRequest) {
       // Allow default generation
     }
 
-    const { theme, difficulty, questType, locationCode, stageCount } = body;
+    const { prompt, theme, difficulty, questType, locationCode, stageCount, status, makePublic } = body;
+    const initialStatus = makePublic ? "ACTIVE" : (status || "DRAFT");
 
     const result = await createAIGameMasterQuest({
+      prompt,
       theme,
       difficulty: difficulty ? parseInt(difficulty, 10) : undefined,
       questType,
       locationCode,
       stageCount: stageCount ? parseInt(stageCount, 10) : undefined,
+      status: initialStatus,
     });
 
     return NextResponse.json({

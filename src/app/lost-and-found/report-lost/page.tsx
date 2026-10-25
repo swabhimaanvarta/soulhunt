@@ -14,7 +14,9 @@ import {
   CheckCircle2,
   ArrowLeft,
   Sparkles,
+  Loader2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ReportLostItemPage() {
   const router = useRouter();
@@ -43,14 +45,25 @@ export default function ReportLostItemPage() {
         if (d.success && d.data) {
           setLocations(d.data);
           if (d.data.length > 0) {
-            setFormData((prev) => ({ ...prev, lastKnownLocationId: d.data[0]._id }));
+            let initialId = d.data[0]._id;
+            if (typeof window !== "undefined") {
+              const urlParams = new URLSearchParams(window.location.search);
+              const paramId = urlParams.get("locationId");
+              if (paramId && d.data.some((l: any) => l._id === paramId)) {
+                initialId = paramId;
+              }
+            }
+            setFormData((prev) => ({ ...prev, lastKnownLocationId: initialId }));
           }
         }
       });
   }, []);
 
+  const { toast } = useToast();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
     setError(null);
 
@@ -66,14 +79,23 @@ export default function ReportLostItemPage() {
         throw new Error(json.error || "Failed to submit lost item report.");
       }
 
-      // Redirect to the item page or quest page
-      if (json.data?.quest?._id) {
-        router.push(`/quests/${json.data.quest._id}`);
-      } else {
-        router.push(`/items/${json.data.item._id}`);
-      }
+      toast({
+        title: "Lost Report Published",
+        description: json.data?.quest
+          ? "Report published & active campus investigation quest initialized!"
+          : "Your lost belonging is registered on the campus directory.",
+        variant: "success",
+      });
+
+      // Always redirect to the item page so the user can verify their listing
+      router.push(`/items/${json.data.item._id}`);
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
+      toast({
+        title: "Report Failed",
+        description: err.message || "An unexpected error occurred.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -342,14 +364,17 @@ export default function ReportLostItemPage() {
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-xl shadow-emerald-500/25 transition-all flex items-center gap-2"
+            className="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-xl shadow-emerald-500/25 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer font-mono"
           >
             {loading ? (
-              <span className="font-mono">Submitting Report...</span>
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Deploying Quest to Campus Grid...</span>
+              </>
             ) : (
               <>
                 <CheckCircle2 className="w-4 h-4" />
-                Publish Lost Report & Deploy Quest
+                <span>Publish Lost Report & Deploy Quest</span>
               </>
             )}
           </button>

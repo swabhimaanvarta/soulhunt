@@ -17,11 +17,23 @@ export async function middleware(req: NextRequest) {
   const token = req.cookies.get("aiem_session")?.value;
   const session = token ? await verifySessionToken(token) : null;
 
-  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
+  const isOperationsRole =
+    session?.role === "ADMIN" ||
+    session?.role === "MODERATOR" ||
+    session?.role === "SAFE_DESK_STAFF";
+
+  if (pathname.startsWith("/api/admin")) {
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Authentication required." }, { status: 401 });
+    }
+    if (!isOperationsRole) {
+      return NextResponse.json({ success: false, error: "Forbidden: Operations access required." }, { status: 403 });
+    }
+  } else if (pathname.startsWith("/admin")) {
     if (!session) {
       return NextResponse.redirect(new URL("/login?redirect=/admin", req.url));
     }
-    if (session.role !== "ADMIN" && session.role !== "MODERATOR") {
+    if (!isOperationsRole) {
       return NextResponse.redirect(new URL("/dashboard?error=unauthorized_role", req.url));
     }
   }

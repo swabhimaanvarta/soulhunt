@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { Event, Notification } from "@/models";
 import { getCurrentUser } from "@/lib/auth";
+import { toPublicEventDTO } from "@/lib/event-dto";
 
 export async function POST(
   req: NextRequest,
@@ -42,7 +43,7 @@ export async function POST(
       return NextResponse.json({
         success: true,
         message: "You are already registered for this event!",
-        data: event,
+        data: toPublicEventDTO(event, user._id.toString()),
       });
     }
 
@@ -58,13 +59,13 @@ export async function POST(
       category: "QUEST_SQUAD",
       title: `Registered: ${event.title}`,
       message: `You are officially registered! Complete event quests to earn ranking points.`,
-      linkUrl: `/events/${event._id}`,
+      linkUrl: `/events?id=${event._id}`,
     });
 
     return NextResponse.json({
       success: true,
       message: "Successfully registered for the event!",
-      data: event,
+      data: toPublicEventDTO(event, user._id.toString()),
     });
   } catch (error: any) {
     return NextResponse.json(

@@ -19,6 +19,7 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ItemDetailPage() {
   const params = useParams();
@@ -48,7 +49,7 @@ export default function ItemDetailPage() {
       if (json.success && json.data) {
         setItem(json.data);
       } else {
-        setError(json.error || "Item not found");
+        setError(typeof json.error === "object" ? json.error.message : json.error || "Item not found");
       }
     } catch (e: any) {
       setError(e.message || "Failed to load item.");
@@ -60,6 +61,8 @@ export default function ItemDetailPage() {
   useEffect(() => {
     if (id) fetchItem();
   }, [id]);
+
+  const { toast } = useToast();
 
   const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,12 +78,24 @@ export default function ItemDetailPage() {
       });
       const json = await res.json();
       if (!json.success) {
-        throw new Error(json.error || "Claim failed.");
+        const errorMsg = json.error?.message || (typeof json.error === "string" ? json.error : "Claim submission failed.");
+        throw new Error(errorMsg);
       }
       setClaimSuccess(json.data);
+      toast({
+        title: "Claim Submitted Successfully",
+        description: json.data?.autoApproved
+          ? "Verification answer matched! 6-digit recovery code generated."
+          : "Your claim has been submitted to the finder/staff for review.",
+        variant: "success",
+      });
       fetchItem();
     } catch (err: any) {
-      alert(err.message);
+      toast({
+        title: "Claim Submission Error",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setClaimLoading(false);
     }
@@ -88,7 +103,11 @@ export default function ItemDetailPage() {
 
   const handleVerifyHandover = async (claimId: string) => {
     if (!verifyCode || verifyCode.length !== 6) {
-      alert("Please enter the 6-digit handover code.");
+      toast({
+        title: "Code Required",
+        description: "Please enter the exact 6-digit handover recovery code.",
+        variant: "destructive",
+      });
       return;
     }
     setVerifyLoading(true);
@@ -106,9 +125,18 @@ export default function ItemDetailPage() {
         throw new Error(json.error?.message || json.error || "Verification failed");
       }
       setVerifySuccess("Handover verified! Rewards distributed and item marked as RECOVERED.");
+      toast({
+        title: "Handover Verified!",
+        description: "Cryptographic PIN match confirmed. Item recovered & rewards deposited.",
+        variant: "success",
+      });
       fetchItem();
     } catch (err: any) {
-      alert(err.message);
+      toast({
+        title: "Verification Failed",
+        description: err.message,
+        variant: "destructive",
+      });
     } finally {
       setVerifyLoading(false);
     }
@@ -235,14 +263,11 @@ export default function ItemDetailPage() {
               </p>
             </div>
 
-            {item.verificationQuestion && (
+            {(item.hasVerificationQuestion || item.verificationQuestion) && (
               <div className="space-y-1">
-                <div className="text-xs font-mono text-cyan-400 flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5" />
-                  Owner Verification Question (Answer to Claim)
-                </div>
-                <div className="text-xs text-slate-300 bg-cyan-950/30 border border-cyan-500/20 p-3 rounded-xl font-mono">
-                  "{item.verificationQuestion}"
+                <div className="text-xs font-mono text-cyan-400 flex items-center gap-1.5 bg-cyan-950/20 border border-cyan-500/20 p-3 rounded-xl">
+                  <Lock className="w-3.5 h-3.5 shrink-0" />
+                  <span>Ownership Verification Protected — Answer required during authenticated claim</span>
                 </div>
               </div>
             )}
@@ -283,11 +308,11 @@ export default function ItemDetailPage() {
             <div className="rounded-2xl bg-slate-950/60 border border-white/5 p-4 flex items-center justify-between text-xs">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center font-mono font-bold text-slate-300">
-                  {item.reporterId?.displayName?.charAt(0) || item.finderId?.displayName?.charAt(0) || "U"}
+                  {item.reporterId?.displayName ? item.reporterId.displayName.charAt(0) : item.finderId?.displayName ? item.finderId.displayName.charAt(0) : <Shield className="w-4 h-4 text-cyan-400" />}
                 </div>
                 <div>
                   <div className="font-bold text-white">
-                    {item.reporterId?.displayName || item.finderId?.displayName || "Campus Student"}
+                    {item.reporterId?.displayName || item.finderId?.displayName || "Verified AIEM Member"}
                   </div>
                   <div className="text-[10px] text-slate-400 font-mono">
                     Reported on {new Date(item.createdAt).toLocaleDateString()}
@@ -355,25 +380,27 @@ export default function ItemDetailPage() {
                   </div>
 
                   <div className="space-y-2 text-xs">
-                    {claim.proofDetails?.answerProvided && (
+                    {(claim.submittedAnswer || claim.proofDetails?.answerProvided) && (
                       <div>
                         <span className="text-slate-400 font-mono">Answer Submitted: </span>
                         <span className="text-emerald-400 font-mono font-bold">
-                          "{claim.proofDetails.answerProvided}"
+                          &ldquo;{claim.submittedAnswer || claim.proofDetails?.answerProvided}&rdquo;
                         </span>
                       </div>
                     )}
-                    <div>
-                      <span className="text-slate-400 font-mono">Claimant Statement: </span>
-                      <span className="text-slate-200">{claim.proofDetails?.proofText}</span>
-                    </div>
+                    {(claim.notes || claim.proofDetails?.proofText) && (
+                      <div>
+                        <span className="text-slate-400 font-mono">Claimant Statement: </span>
+                        <span className="text-slate-200">{claim.notes || claim.proofDetails?.proofText}</span>
+                      </div>
+                    )}
                   </div>
 
                   {claim.status === "APPROVED" && (
                     <div className="pt-3 border-t border-white/5 space-y-3">
                       <div className="text-xs font-mono text-amber-400 flex items-center gap-1.5 font-bold">
                         <Lock className="w-3.5 h-3.5" />
-                        Handover Ready: Enter Claimant's 6-Digit Code
+                        Handover Ready: Enter Claimant&apos;s 6-Digit Code
                       </div>
                       <p className="text-xs text-slate-400">
                         Ask the claimant or Safe-Desk officer for their 6-digit recovery code to complete the verification.
@@ -406,8 +433,27 @@ export default function ItemDetailPage() {
               </div>
             )}
           </div>
+        ) : !item.isAuthenticated ? (
+          /* Unauthenticated visitor */
+          <div className="rounded-2xl bg-slate-950/60 p-6 border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="font-bold text-white text-sm flex items-center gap-2">
+                <Lock className="w-4 h-4 text-cyan-400" />
+                {isLost ? "Found This Belonging?" : "Claim Your Lost Belonging"}
+              </div>
+              <p className="text-xs text-slate-400">
+                Sign in with your verified AIEM campus credentials to initiate an ownership claim or submit recovery evidence.
+              </p>
+            </div>
+            <Link
+              href={`/login?redirect=/items/${id}`}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:brightness-110 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 font-mono transition-all text-center shrink-0"
+            >
+              Sign In to Claim
+            </Link>
+          </div>
         ) : (
-          /* If Other Hunter: Claim Item */
+          /* If Authenticated Hunter: Claim Item */
           <div className="space-y-4">
             {claimSuccess ? (
               <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-6 space-y-3">
@@ -431,15 +477,14 @@ export default function ItemDetailPage() {
                   Submit Claim Verification
                 </h3>
 
-                {item.verificationQuestion && (
+                {(item.hasVerificationQuestion || item.verificationQuestion) && (
                   <div className="space-y-1">
                     <label className="text-xs font-mono text-slate-300">
-                      Answer to: "{item.verificationQuestion}"
+                      Secret Verification Answer (Optional Instant Match)
                     </label>
                     <input
                       type="text"
-                      required
-                      placeholder="Enter verification answer..."
+                      placeholder="Enter secret answer if known (e.g. engraving, sticker, battery serial)..."
                       value={answerProvided}
                       onChange={(e) => setAnswerProvided(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400"
