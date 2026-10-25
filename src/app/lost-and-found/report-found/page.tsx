@@ -117,15 +117,17 @@ export default function ReportFoundItemPage() {
     setError(null);
 
     try {
+      const clientRequestId = `found_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const res = await fetch("/api/items/found", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, clientRequestId }),
       });
 
       const json = await res.json();
       if (!json.success) {
-        throw new Error(json.error || "Failed to submit found item report.");
+        const errorMsg = json.error?.message || (typeof json.error === "string" ? json.error : "Failed to submit found item report.");
+        throw new Error(errorMsg);
       }
 
       toast({
@@ -386,7 +388,7 @@ export default function ReportFoundItemPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Submitting to Safe-Desk Ledger...</span>
+                <span>Submitting...</span>
               </>
             ) : (
               <>

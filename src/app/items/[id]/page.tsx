@@ -42,12 +42,34 @@ export default function ItemDetailPage() {
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifySuccess, setVerifySuccess] = useState<string | null>(null);
 
+  // Active Claim Tracking State
+  const [activeClaimDetail, setActiveClaimDetail] = useState<any>(null);
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  const fetchActiveClaim = async (claimId: string) => {
+    try {
+      const res = await fetch(`/api/claims/${claimId}`);
+      const json = await res.json();
+      if (json.success && json.data) {
+        setActiveClaimDetail(json.data);
+      }
+    } catch {
+      // non-blocking
+    }
+  };
+
   const fetchItem = async () => {
     try {
       const res = await fetch(`/api/items/${id}`);
       const json = await res.json();
       if (json.success && json.data) {
         setItem(json.data);
+        if (!json.data.isOwner && !json.data.isStaff && json.data.claims && json.data.claims.length > 0) {
+          const myClaim = json.data.claims[0];
+          if (myClaim?._id) {
+            fetchActiveClaim(myClaim._id);
+          }
+        }
       } else {
         setError(typeof json.error === "object" ? json.error.message : json.error || "Item not found");
       }
@@ -64,16 +86,48 @@ export default function ItemDetailPage() {
 
   const { toast } = useToast();
 
+  const handleCancelClaim = async (claimId: string) => {
+    if (!confirm("Are you sure you want to withdraw your claim?")) return;
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`/api/claims/${claimId}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!json.success) {
+        throw new Error(json.error?.message || "Failed to withdraw claim.");
+      }
+      toast({
+        title: "Claim Withdrawn",
+        description: "Your claim has been withdrawn and the item is available for other claimants.",
+        variant: "success",
+      });
+      setActiveClaimDetail(null);
+      setClaimSuccess(null);
+      fetchItem();
+    } catch (err: any) {
+      toast({
+        title: "Withdrawal Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setClaimLoading(true);
     try {
+      const clientRequestId = `claim_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const res = await fetch(`/api/items/${id}/claim`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           answerProvided,
           proofText,
+          clientRequestId,
         }),
       });
       const json = await res.json();
@@ -82,6 +136,9 @@ export default function ItemDetailPage() {
         throw new Error(errorMsg);
       }
       setClaimSuccess(json.data);
+      if (json.data?.claimId) {
+        fetchActiveClaim(json.data.claimId);
+      }
       toast({
         title: "Claim Submitted Successfully",
         description: json.data?.autoApproved
@@ -179,12 +236,19 @@ export default function ItemDetailPage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       {/* Back button */}
       <div>
-        <Link
-          href="/lost-and-found"
-          className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-400 hover:text-white transition-colors"
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              router.back();
+            } else {
+              router.push("/lost-and-found");
+            }
+          }}
+          className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-400 hover:text-white transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" /> Back to Lost & Found Directory
-        </Link>
+        </button>
       </div>
 
       {/* Main Item Card */}
@@ -253,9 +317,35 @@ export default function ItemDetailPage() {
           </div>
         </div>
 
-        {/* Public Description & Location */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-white/5">
-          <div className="space-y-4">
+        {/* Item Photo, Description & Campus Location */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 pt-4 border-t border-white/5">
+          {/* Photo Preview Container */}
+          <div className="md:col-span-4 space-y-2">
+            <div className="text-xs font-mono text-slate-400">Belonging Photograph</div>
+            <div className="relative rounded-2xl overflow-hidden bg-slate-950/80 border border-white/10 aspect-video md:aspect-square flex items-center justify-center group shadow-inner">
+              <img
+                src={item.photoUrl || "/placeholder-item.png"}
+                alt={item.title || "Belonging item photo"}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.src.endsWith("/placeholder-item.png")) {
+                    target.src = "/placeholder-item.png";
+                  }
+                }}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              />
+              {!item.photoUrl && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/60 p-3 text-center pointer-events-none">
+                  <Shield className="w-8 h-8 text-slate-600 mb-1.5" />
+                  <span className="text-[11px] font-mono text-slate-300 font-bold">Privacy Derivative</span>
+                  <span className="text-[10px] text-slate-500">Derivative placeholder displayed</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Description & Verification Challenge */}
+          <div className="md:col-span-4 space-y-4">
             <div className="space-y-1">
               <div className="text-xs font-mono text-slate-400">Public Description</div>
               <p className="text-sm text-slate-200 leading-relaxed bg-slate-950/60 p-4 rounded-xl border border-white/5">
@@ -273,7 +363,8 @@ export default function ItemDetailPage() {
             )}
           </div>
 
-          <div className="space-y-4">
+          {/* Location & Reporter Details */}
+          <div className="md:col-span-4 space-y-4">
             <div className="rounded-2xl bg-slate-950/60 border border-white/5 p-4 space-y-3">
               <div className="text-xs font-mono uppercase text-slate-400 border-b border-white/5 pb-2">
                 Campus Location Coordinates
@@ -453,7 +544,7 @@ export default function ItemDetailPage() {
             </Link>
           </div>
         ) : (
-          /* If Authenticated Hunter: Claim Item */
+          /* If Authenticated Hunter: Claim Item or View Active Claim Status */
           <div className="space-y-4">
             {claimSuccess ? (
               <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/30 p-6 space-y-3">
@@ -471,6 +562,194 @@ export default function ItemDetailPage() {
                   {claimSuccess.handoverCode}
                 </div>
               </div>
+            ) : (!isOwner && !isStaff && item.claims && item.claims.length > 0) ? (
+              (() => {
+                const myClaim = item.claims[0];
+                const activeStatus = activeClaimDetail?.status || myClaim.status;
+                const activePin = activeClaimDetail?.handoverCode || (claimSuccess?.claimId === myClaim._id ? claimSuccess?.handoverCode : null);
+
+                return (
+                  <div className="rounded-2xl bg-slate-950/80 border border-white/10 p-6 space-y-5 shadow-xl">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm">Your Active Claim Ticket</span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                            activeStatus === "APPROVED"
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                              : activeStatus === "PENDING"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                              : activeStatus === "HANDOVER_COMPLETE"
+                              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                              : "bg-rose-500/20 text-rose-300 border border-rose-500/40"
+                          }`}
+                        >
+                          {activeStatus === "APPROVED"
+                            ? "Approved for Pickup"
+                            : activeStatus === "PENDING"
+                            ? "Pending Review"
+                            : activeStatus === "HANDOVER_COMPLETE"
+                            ? "Handover Complete"
+                            : activeStatus}
+                        </span>
+                      </div>
+                      <div className="text-[11px] font-mono text-slate-400">
+                        Filed {new Date(myClaim.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+
+                    {activeStatus === "PENDING" && (
+                      <div className="space-y-3">
+                        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-200/90 space-y-2">
+                          <div className="flex items-center gap-2 font-bold text-amber-300">
+                            <Clock className="w-4 h-4 text-amber-400 animate-pulse" />
+                            <span>Under Custodian / Safe-Desk Review</span>
+                          </div>
+                          <p className="leading-relaxed">
+                            Your proof of ownership is currently being verified. The finder or campus Safe-Desk custodian will review your submitted statements. You will receive an alert once authorized.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-[11px] font-mono text-slate-400">
+                            No longer need this claim or entered incorrect details?
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCancelClaim(myClaim._id)}
+                            disabled={cancelLoading}
+                            className="px-3.5 py-1.5 rounded-xl border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 text-xs font-mono font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                          >
+                            {cancelLoading ? "Withdrawing..." : "Withdraw Claim"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeStatus === "APPROVED" && (
+                      <div className="space-y-4">
+                        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-200 space-y-2">
+                          <div className="flex items-center gap-2 font-bold text-emerald-400">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                            <span>Claim Verified & Approved for Handover!</span>
+                          </div>
+                          <p className="leading-relaxed">
+                            Ownership confirmed! Present the persistent 6-digit recovery PIN below at the designated campus Safe-Desk or to the custodian to receive your belonging.
+                          </p>
+                        </div>
+
+                        {/* Persistent 6-Digit Handover PIN Display */}
+                        {activePin ? (
+                          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-950/90 p-5 rounded-2xl border border-emerald-500/40">
+                            <div className="text-center sm:text-left space-y-1">
+                              <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5 justify-center sm:justify-start">
+                                <KeyRound className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Your 6-Digit Handover Verification PIN</span>
+                              </div>
+                              <div className="text-3xl sm:text-4xl font-mono font-black text-emerald-400 tracking-widest mt-1">
+                                {activePin}
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-mono">
+                                Present this persistent PIN upon collecting your belonging.
+                              </div>
+                            </div>
+                            {(activeClaimDetail?.handoverCodeExpiresAt || claimSuccess?.expiresAt) && (
+                              <div className="text-center sm:text-right font-mono text-xs text-slate-400 bg-slate-900/60 p-3 rounded-xl border border-white/5">
+                                <div className="text-emerald-400 font-bold">24-Hour Active Validity</div>
+                                <div className="text-slate-500 text-[10px] mt-0.5">
+                                  Expires {new Date(activeClaimDetail?.handoverCodeExpiresAt || claimSuccess?.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="p-4 rounded-xl bg-slate-900/80 border border-white/10 text-xs text-slate-400 font-mono flex items-center justify-between">
+                            <span>Retrieving persistent recovery PIN...</span>
+                            <button
+                              type="button"
+                              onClick={() => fetchActiveClaim(myClaim._id)}
+                              className="text-cyan-400 underline hover:text-cyan-300 text-[11px]"
+                            >
+                              Refresh PIN
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Safe-Desk Instructions */}
+                        <div className="p-4 rounded-xl bg-slate-900/80 border border-white/5 space-y-2.5 text-xs">
+                          <div className="font-mono text-cyan-400 font-bold flex items-center gap-1.5">
+                            <Building className="w-4 h-4 text-cyan-400" />
+                            Safe-Desk Custody & Collection Instructions
+                          </div>
+                          <p className="text-slate-300 leading-relaxed">
+                            {activeClaimDetail?.safeDeskInstructions?.guidance ||
+                              "Proceed to the campus Safe-Desk station with your official AIEM Student Identity Card and present your 6-digit recovery PIN to complete physical custody handover."}
+                          </p>
+                          <div className="flex flex-wrap gap-4 pt-2 font-mono text-[11px] text-slate-400 border-t border-white/5">
+                            <div>
+                              <span className="text-slate-500">Designated Station: </span>
+                              <span className="text-white font-bold">
+                                {activeClaimDetail?.safeDeskInstructions?.locationName ||
+                                  custody?.name ||
+                                  location?.name ||
+                                  "Campus Safe-Desk"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Desk Hours: </span>
+                              <span className="text-white">
+                                {activeClaimDetail?.safeDeskInstructions?.operatingHours ||
+                                  custody?.operatingHours ||
+                                  "08:00 AM - 06:00 PM"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {activeClaimDetail?.handoverLocked && (
+                          <div className="p-3.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                            <span>
+                              PIN verification is temporarily locked after 5 incorrect attempts. Please bring your AIEM student ID card to the Safe-Desk officer in person to reset.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {activeStatus === "HANDOVER_COMPLETE" && (
+                      <div className="p-4 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-xs text-cyan-200 space-y-2">
+                        <div className="flex items-center gap-2 font-bold text-cyan-400">
+                          <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                          <span>Belonging Recovered Successfully</span>
+                        </div>
+                        <p className="leading-relaxed">
+                          Dual-code cryptographic verification complete. Record closed on campus ledger.
+                        </p>
+                      </div>
+                    )}
+
+                    {activeStatus === "REJECTED" && (
+                      <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 space-y-2">
+                        <div className="flex items-center gap-2 font-bold text-rose-400">
+                          <AlertCircle className="w-4 h-4 text-rose-400" />
+                          <span>Claim Rejected</span>
+                        </div>
+                        <p className="leading-relaxed">
+                          {myClaim.decisionNote ||
+                            myClaim.notes ||
+                            "The submitted details did not match verified item attributes. Visit the campus Safe-Desk in person if you need assistance."}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="text-xs text-slate-400 border-t border-white/5 pt-2">
+                      <span className="font-mono text-slate-500">Submitted statement: </span>
+                      <span className="text-slate-300">{myClaim.notes || myClaim.proofDetails?.proofText || "Proof provided"}</span>
+                    </div>
+                  </div>
+                );
+              })()
             ) : showClaimModal ? (
               <form onSubmit={handleClaimSubmit} className="space-y-4 bg-slate-950/80 p-6 rounded-2xl border border-white/10">
                 <h3 className="font-bold text-sm text-white">

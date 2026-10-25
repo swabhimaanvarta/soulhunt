@@ -108,12 +108,15 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   let requestId: string | undefined;
+  let squadIdStr: string | undefined;
+  let userIdVal: any = undefined;
   try {
     if (!isFeatureEnabled("SQUAD_CHAT_ENABLED")) {
       return apiError("FEATURE_DISABLED", "Squad chat is temporarily disabled.", 403);
     }
 
     const { id } = await params;
+    squadIdStr = id;
     if (!Types.ObjectId.isValid(id)) {
       return apiError("INVALID_SQUAD_ID", "Invalid squad identifier.", 400);
     }
@@ -122,6 +125,7 @@ export async function POST(
     if (!user) {
       return apiError("UNAUTHORIZED", "Authentication required", 401);
     }
+    userIdVal = user._id;
 
     await connectDB();
     const squad = await Squad.findById(id);
@@ -141,6 +145,19 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const rawText = (body && typeof body === "object" && typeof body.text === "string" ? body.text : "").trim();
     requestId = (body && typeof body === "object" && typeof body.requestId === "string" ? body.requestId.trim() : undefined) || undefined;
+
+    // Idempotency check before rate limiting (replayed requests return existing message)
+    if (requestId) {
+      const existing = await SquadMessage.findOne({
+        squadId: squad._id,
+        senderId: user._id,
+        requestId,
+      }).populate("senderId", "displayName username avatarUrl rankTitle");
+
+      if (existing) {
+        return NextResponse.json({ success: true, data: existing, replayed: true });
+      }
+    }
 
     // Rate Limiting: 1 message per 2 seconds cooldown
     const cooldown = await checkRateLimit(`chat_cd:${user._id}`, 1, 2);
@@ -175,19 +192,6 @@ export async function POST(
         400,
         requestId
       );
-    }
-
-    // Idempotency check
-    if (requestId) {
-      const existing = await SquadMessage.findOne({
-        squadId: squad._id,
-        senderId: user._id,
-        requestId,
-      }).populate("senderId", "displayName username avatarUrl rankTitle");
-
-      if (existing) {
-        return NextResponse.json({ success: true, data: existing, replayed: true });
-      }
     }
 
     // Normalize whitespace & escape XSS
@@ -238,6 +242,23 @@ export async function POST(
 
     return NextResponse.json({ success: true, data: populated }, { status: 201 });
   } catch (error: any) {
+    if (error?.code === 11000 && requestId && squadIdStr) {
+      try {
+        const replayed = await SquadMessage.findOne({
+          squadId: new Types.ObjectId(squadIdStr),
+          senderId: userIdVal,
+          requestId,
+        })
+          .populate("senderId", "displayName username avatarUrl rankTitle")
+          .lean();
+
+        if (replayed) {
+          return NextResponse.json({ success: true, data: replayed, replayed: true });
+        }
+      } catch {
+        // Fall through to server error envelope
+      }
+    }
     return apiServerError(error, "MESSAGE_SEND_FAILED", "Failed to transmit squad message.", requestId);
   }
 }

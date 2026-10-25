@@ -200,8 +200,8 @@ export default function AdminControlPage() {
     code: "",
     zoneType: "ACADEMIC_BLOCK",
     description: "",
-    lat: 15.283,
-    lng: 73.985,
+    lat: 15.5948,
+    lng: 73.7947,
     mapX: 50,
     mapY: 50,
     isSafeDesk: false,
@@ -2532,14 +2532,23 @@ export default function AdminControlPage() {
                       <Trophy className="w-4 h-4 text-amber-400" />
                       <span>CAMPUS CITATION REGISTRY ({cmsAchievements.length} DEFINITIONS)</span>
                     </h4>
-                    <button
-                      type="button"
-                      onClick={() => fetchCmsAchievements()}
-                      className="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>Refresh</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href="/admin/achievements"
+                        className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 hover:underline"
+                      >
+                        <span>Open Dedicated Editor</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => fetchCmsAchievements()}
+                        className="text-xs font-mono text-slate-400 hover:text-white flex items-center gap-1"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Refresh</span>
+                      </button>
+                    </div>
                   </div>
 
                   {cmsAchievementsLoading ? (

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { Notification } from "@/models";
+import { connectDB } from "@/lib/db";
+import { isValidSameOriginRelativePath, sanitizeNotificationLink } from "@/lib/notifications";
 
 function decodeCursor(cursorStr?: string | null): any {
   if (!cursorStr) return null;
@@ -17,6 +19,7 @@ function encodeCursor(data: any): string {
 
 export async function GET(req: NextRequest) {
   try {
+    await connectDB();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -58,7 +61,13 @@ export async function GET(req: NextRequest) {
     const [rawNotifications, unreadCount] = await Promise.all([notifsPromise, unreadCountPromise]);
 
     const hasMore = rawNotifications.length > limit;
-    const notifications = hasMore ? rawNotifications.slice(0, limit) : rawNotifications;
+    const sliced = hasMore ? rawNotifications.slice(0, limit) : rawNotifications;
+
+    // Validate and sanitize all linkUrl fields to enforce same-origin relative paths
+    const notifications = sliced.map((n) => ({
+      ...n,
+      linkUrl: sanitizeNotificationLink(n.linkUrl),
+    }));
 
     let nextCursor: string | null = null;
     if (hasMore && notifications.length > 0) {
@@ -82,8 +91,59 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function POST(req: NextRequest) {
+  try {
+    await connectDB();
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { title, message, category, linkUrl, targetUserId } = body;
+
+    if (!title || !message || !category) {
+      return NextResponse.json(
+        { success: false, error: "Validation failed: title, message, and category are required." },
+        { status: 400 }
+      );
+    }
+
+    // Strict validation of linkUrl: must be same-origin relative path only
+    if (linkUrl !== undefined && linkUrl !== null && !isValidSameOriginRelativePath(linkUrl)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Validation failed: linkUrl must be a same-origin relative path only. External domains and javascript: URIs are prohibited.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const safeLinkUrl = sanitizeNotificationLink(linkUrl);
+
+    const recipientUserId = (user.role === "ADMIN" || user.role === "MODERATOR") && targetUserId
+      ? targetUserId
+      : user._id;
+
+    const notif = await Notification.create({
+      userId: recipientUserId,
+      category,
+      title: String(title).trim(),
+      message: String(message).trim(),
+      linkUrl: safeLinkUrl,
+      isRead: false,
+    });
+
+    return NextResponse.json({ success: true, data: notif }, { status: 201 });
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: NextRequest) {
   try {
+    await connectDB();
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
@@ -99,8 +159,16 @@ export async function PATCH(req: NextRequest) {
     }
 
     if (targetId) {
-      await Notification.findOneAndUpdate({ _id: targetId, userId: user._id }, { $set: { isRead: true } });
-      return NextResponse.json({ success: true, message: "Notification marked as read." });
+      const updated = await Notification.findOneAndUpdate(
+        { _id: targetId, userId: user._id },
+        { $set: { isRead: true } },
+        { new: true }
+      );
+      return NextResponse.json({
+        success: true,
+        message: "Notification marked as read.",
+        data: updated ? { ...updated.toObject(), isRead: true } : null,
+      });
     }
 
     return NextResponse.json({ success: false, error: "Invalid parameters" }, { status: 400 });

@@ -95,7 +95,29 @@ export function canModerateMessages(actorRole: SquadRole): boolean {
 /**
  * Can read / send squad chat messages
  * Allowed: all active members (Member, Elder, CoLeader, Leader)
+ * Non-Member: No
  */
-export function canAccessSquadChat(role?: SquadRole | null): boolean {
-  return Boolean(role);
+export function canAccessSquadChat(role?: SquadRole | string | null): boolean {
+  if (!role) return false;
+  const upper = String(role).toUpperCase();
+  return (
+    upper === "LEADER" ||
+    upper === "COLEADER" ||
+    upper === "OFFICER" ||
+    upper === "ELDER" ||
+    upper === "MEMBER"
+  );
+}
+
+/**
+ * Can report a chat message or mute a user locally
+ * Allowed: Leader, Co-Leader, Elder, Member (any active squad member)
+ * Non-Member: No
+ */
+export function canReportChatMessage(role?: SquadRole | string | null): boolean {
+  return canAccessSquadChat(role);
+}
+
+export function canMuteUserLocally(role?: SquadRole | string | null): boolean {
+  return canAccessSquadChat(role);
 }

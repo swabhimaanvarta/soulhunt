@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import { Layers, Compass, Radio, Check, Move, AlertCircle, Crosshair, Maximize2, Minimize2, Navigation } from "lucide-react";
+import { Compass, Radio, Check, Move, Minimize2, Maximize2, Navigation } from "lucide-react";
 
 export interface CampusLocationPoint {
   _id: string;
@@ -52,21 +52,6 @@ interface CampusRealMapProps {
   radarSweepActive?: boolean;
 }
 
-export type ImageryLayerType = "ESRI_SATELLITE" | "CARTO_DARK";
-
-export const TILE_LAYERS: Record<ImageryLayerType, { url: string; attribution: string; maxZoom: number }> = {
-  ESRI_SATELLITE: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    attribution: "&copy; Esri &mdash; Earthstar Geographics (Imagery without commercial labels)",
-    maxZoom: 19,
-  },
-  CARTO_DARK: {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-    attribution: "&copy; OpenStreetMap contributors &copy; CARTO Tactical Basemap",
-    maxZoom: 19,
-  },
-};
-
 export { CAMPUS_CENTER, CAMPUS_BOUNDS_COORDS } from "@/lib/campus-constants";
 import { CAMPUS_CENTER, CAMPUS_BOUNDS_COORDS } from "@/lib/campus-constants";
 
@@ -98,8 +83,6 @@ export default function CampusRealMap({
   const markersRef = useRef<Record<string, L.Marker>>({});
   const tileLayerRef = useRef<L.TileLayer | null>(null);
 
-  // Default to pure ESRI imagery (no unofficial Google tiles or commercial clutter)
-  const [imageryType, setImageryType] = useState<ImageryLayerType>("ESRI_SATELLITE");
   const [localRadarSweep, setLocalRadarSweep] = useState(radarSweepActive);
   const [repositioningId, setRepositioningId] = useState<string | null>(null);
   const [statusNotice, setStatusNotice] = useState<string | null>(null);
@@ -109,7 +92,7 @@ export default function CampusRealMap({
   const handleRecenter = () => {
     if (!mapInstanceRef.current) return;
     mapInstanceRef.current.setView(CAMPUS_CENTER, 18, { animate: true, duration: 0.8 });
-    setStatusNotice("Radar recentered on AIEM Assagao Campus Hub");
+    setStatusNotice("Radar recentered on AIEM Assagao Campus (15.5948° N, 73.7947° E)");
     setTimeout(() => setStatusNotice(null), 2500);
   };
 
@@ -135,14 +118,10 @@ export default function CampusRealMap({
         const { latitude, longitude, accuracy } = pos.coords;
         if (!mapInstanceRef.current) return;
 
-        // Verify position is within campus bounds
-        const campusBounds = L.latLngBounds(CAMPUS_BOUNDS_COORDS[0], CAMPUS_BOUNDS_COORDS[1]);
-        const userLatLng = L.latLng(latitude, longitude);
-
         const userHtml = `
           <div class="relative flex items-center justify-center">
-            <span class="absolute w-8 h-8 rounded-full bg-cyan-400/30 animate-ping"></span>
-            <span class="w-4 h-4 rounded-full bg-cyan-400 border-2 border-white shadow-[0_0_12px_#22D3EE]"></span>
+            <span class="absolute w-8 h-8 rounded-full bg-cyan-400/40 animate-ping"></span>
+            <span class="w-4 h-4 rounded-full bg-cyan-400 border-2 border-white shadow-[0_0_14px_#22D3EE]"></span>
           </div>
         `;
         const userIcon = L.divIcon({
@@ -164,15 +143,8 @@ export default function CampusRealMap({
 
         setUserLocationMarker(marker);
 
-        if (campusBounds.contains(userLatLng)) {
-          mapInstanceRef.current.flyTo([latitude, longitude], 18, { animate: true, duration: 1 });
-        } else {
-          setStatusNotice(`Local GPS locked: Coordinates are outside campus perimeter.`);
-          setTimeout(() => setStatusNotice(null), 4000);
-          return;
-        }
-
-        setStatusNotice(`Local GPS lock: ±${Math.round(accuracy)}m (Not transmitted)`);
+        mapInstanceRef.current.flyTo([latitude, longitude], 18, { animate: true, duration: 1 });
+        setStatusNotice(`Local GPS lock: ±${Math.round(accuracy)}m`);
         setTimeout(() => setStatusNotice(null), 4000);
       },
       (err) => {
@@ -183,31 +155,31 @@ export default function CampusRealMap({
     );
   };
 
-  // 1. Initialize Leaflet Map with strict campus bounds and zoom limits
+  // 1. Initialize Leaflet Map with smooth zooming and verified satellite imagery
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
-
-    const bounds = L.latLngBounds(CAMPUS_BOUNDS_COORDS[0], CAMPUS_BOUNDS_COORDS[1]);
 
     const map = L.map(mapContainerRef.current, {
       center: CAMPUS_CENTER,
       zoom: 18,
-      minZoom: 16,
-      maxZoom: 19,
-      maxBounds: bounds,
-      maxBoundsViscosity: 1.0, // Strictly locks map to campus bounds
+      minZoom: 15,
+      maxZoom: 20,
       zoomControl: true,
       attributionControl: true,
     });
 
-    const activeConfig = TILE_LAYERS.ESRI_SATELLITE;
-    const initialTileLayer = L.tileLayer(activeConfig.url, {
-      attribution: activeConfig.attribution,
-      maxZoom: activeConfig.maxZoom,
-      subdomains: ["a", "b", "c", "d"],
-    }).addTo(map);
+    // Esri Aerial Imagery with maxNativeZoom: 18 so zoom 19 & 20 upscale smoothly without failing
+    const aerialTileLayer = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "&copy; Esri &mdash; Earthstar Geographics Aerial Recon",
+        maxZoom: 20,
+        maxNativeZoom: 18,
+        subdomains: ["a", "b", "c", "d"],
+      }
+    ).addTo(map);
 
-    tileLayerRef.current = initialTileLayer;
+    tileLayerRef.current = aerialTileLayer;
     mapInstanceRef.current = map;
 
     return () => {
@@ -216,25 +188,7 @@ export default function CampusRealMap({
     };
   }, []);
 
-  // 2. Handle Layer Switching
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
-
-    if (tileLayerRef.current) {
-      mapInstanceRef.current.removeLayer(tileLayerRef.current);
-    }
-
-    const config = TILE_LAYERS[imageryType];
-    const newLayer = L.tileLayer(config.url, {
-      attribution: config.attribution,
-      maxZoom: config.maxZoom,
-      subdomains: ["a", "b", "c", "d"],
-    }).addTo(mapInstanceRef.current);
-
-    tileLayerRef.current = newLayer;
-  }, [imageryType]);
-
-  // 3. Render and Synchronize Location Markers
+  // 2. Render and Synchronize Location Markers with Theme-Matching Tactical Teardrop Pins
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -250,38 +204,66 @@ export default function CampusRealMap({
 
     locations.forEach((loc) => {
       const isSelected = selectedLocation?._id === loc._id;
-      const isRepositioning = repositioningId === loc._id;
 
+      // Theme-matching colors
       let markerColor = "#10B981"; // emerald default
-      if (loc.isSafeDesk) markerColor = "#06B6D4"; // cyan
-      if (loc.zoneType === "CANTEEN") markerColor = "#F59E0B"; // amber
-      if (loc.zoneType === "HOSTEL") markerColor = "#8B5CF6"; // violet
-      if (loc.zoneType === "LIBRARY") markerColor = "#3B82F6"; // blue
-      if (isSelected) markerColor = "#F43F5E"; // rose when selected
+      let glyph = "🏛️";
+      if (loc.isSafeDesk) {
+        markerColor = "#10B981";
+        glyph = "🛡️";
+      } else if (loc.zoneType === "CANTEEN") {
+        markerColor = "#F59E0B";
+        glyph = "☕";
+      } else if (loc.zoneType === "SPORTS") {
+        markerColor = "#22C55E";
+        glyph = "⚽";
+      } else if (loc.code?.includes("COMP") || loc.code?.includes("AI")) {
+        markerColor = "#06B6D4";
+        glyph = "⚡";
+      } else if (loc.code?.includes("ECE")) {
+        markerColor = "#8B5CF6";
+        glyph = "📡";
+      } else if (loc.code?.includes("MECH")) {
+        markerColor = "#F97316";
+        glyph = "⚙️";
+      } else if (loc.zoneType === "LIBRARY") {
+        markerColor = "#38BDF8";
+        glyph = "📚";
+      }
 
+      if (isSelected) {
+        markerColor = "#F43F5E"; // rose-red focus
+      }
+
+      // Cyberpunk teardrop pointer pin with exact bottom needle anchor
       const iconHtml = `
-        <div class="relative flex items-center justify-center transition-transform ${isSelected ? "scale-125 z-50" : "scale-100"}">
+        <div class="relative flex flex-col items-center cursor-pointer transition-transform duration-200 ${
+          isSelected ? "scale-125 z-50 -translate-y-1" : "scale-100 hover:scale-110"
+        }">
           ${
             loc.isSafeDesk
-              ? `<span class="absolute w-10 h-10 rounded-full animate-ping opacity-30" style="background-color: ${markerColor};"></span>`
+              ? `<span class="absolute -top-1 w-11 h-11 rounded-full animate-ping opacity-35" style="background-color: ${markerColor};"></span>`
               : ""
           }
-          <div class="w-8 h-8 rounded-full border-2 border-white shadow-2xl flex items-center justify-center font-mono font-bold text-xs text-white" style="background-color: ${markerColor}; box-shadow: 0 0 15px ${markerColor}80;">
-            ${loc.isSafeDesk ? "🛡️" : loc.code.slice(0, 3)}
+          <!-- Tactical HUD Pin Badge -->
+          <div class="relative flex items-center justify-center w-9 h-9 rounded-2xl bg-slate-950/95 border-2 shadow-2xl transition-all" style="border-color: ${markerColor}; box-shadow: 0 0 16px ${markerColor}90;">
+            <span class="text-sm select-none">${glyph}</span>
+            ${
+              (loc.itemCount ?? 0) > 0
+                ? `<span class="absolute -top-1.5 -right-1.5 bg-amber-400 text-slate-950 font-black font-mono text-[9px] px-1.5 py-0.2 rounded-full border border-black shadow-md">${loc.itemCount}</span>`
+                : ""
+            }
           </div>
-          ${
-            (loc.itemCount ?? 0) > 0
-              ? `<span class="absolute -top-1 -right-1 bg-amber-500 text-slate-950 font-bold font-mono text-[9px] px-1 rounded-full border border-black">${loc.itemCount}</span>`
-              : ""
-          }
+          <!-- Sharp Downward Pointing Needle for Exact Campus Pinning -->
+          <div class="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-t-[7px] -mt-0.5" style="border-top-color: ${markerColor};"></div>
         </div>
       `;
 
       const customIcon = L.divIcon({
         html: iconHtml,
-        className: "custom-radar-marker",
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
+        className: "custom-cyber-pin",
+        iconSize: [36, 44],
+        iconAnchor: [18, 42], // Exact bottom needle tip
       });
 
       const lat = loc.coordinates?.lat || 15.5948;
@@ -316,10 +298,10 @@ export default function CampusRealMap({
         });
 
         marker.bindTooltip(
-          `<div style="font-family: monospace; font-size: 11px; font-weight: bold; color: white; background: #070A0F; padding: 4px 8px; border-radius: 8px; border: 1px solid ${markerColor};">
-            ${loc.isSafeDesk ? "🛡️ " : ""}${loc.name} (${loc.code})
+          `<div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: bold; color: #F1F5F9; background: rgba(11, 15, 23, 0.95); padding: 5px 9px; border-radius: 10px; border: 1px solid ${markerColor}; box-shadow: 0 4px 20px rgba(0,0,0,0.6);">
+            ${loc.isSafeDesk ? "🛡️ " : ""}${loc.name} <span style="color: ${markerColor};">(${loc.code})</span>
           </div>`,
-          { direction: "top", offset: [0, -16], opacity: 0.95 }
+          { direction: "top", offset: [0, -42], opacity: 0.98 }
         );
 
         markersRef.current[loc._id] = marker;
@@ -338,7 +320,7 @@ export default function CampusRealMap({
     });
   }, [locations, selectedLocation, adminMode, repositioningId, onLocationReposition, onSelectLocation]);
 
-  // 4. Focus when selectedLocation changes
+  // 3. Focus when selectedLocation changes
   useEffect(() => {
     if (!selectedLocation || !mapInstanceRef.current) return;
     const lat = selectedLocation.coordinates?.lat || 15.5948;
@@ -361,7 +343,7 @@ export default function CampusRealMap({
         isFullscreen ? "fixed inset-0 z-50 rounded-none border-none h-screen w-screen" : "h-[450px] md:h-[550px] lg:h-[620px]"
       }`}
     >
-      {/* Map Container */}
+      {/* Map Surface Container */}
       <div ref={mapContainerRef} className="w-full h-full bg-[#070A0F]" />
 
       {/* Futuristic Radar Sweep Overlay */}
@@ -375,7 +357,7 @@ export default function CampusRealMap({
       )}
 
       {/* Floating Tactical Overlay Controls (Top Right) */}
-      <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-950/85 backdrop-blur-md border border-white/10 shadow-xl">
+      <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 p-1.5 rounded-2xl bg-slate-950/90 backdrop-blur-md border border-white/10 shadow-xl">
         <button
           type="button"
           onClick={handleRecenter}
@@ -422,50 +404,30 @@ export default function CampusRealMap({
 
         <div className="w-[1px] h-4 bg-white/20 mx-0.5 hidden sm:block" />
 
-        <button
-          onClick={() => setImageryType("ESRI_SATELLITE")}
-          className={`flex items-center gap-1 px-2 py-1 rounded-lg font-bold transition-all text-xs ${
-            imageryType === "ESRI_SATELLITE"
-              ? "bg-emerald-500 text-slate-950 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
-              : "text-slate-400 hover:text-white"
-          }`}
-          title="Esri Pure Aerial Satellite Imagery (No commercial labels)"
-        >
-          <span>Aerial Imagery</span>
-        </button>
-
-        <button
-          onClick={() => setImageryType("CARTO_DARK")}
-          className={`flex items-center gap-1 px-2 py-1 rounded-lg font-bold transition-all text-xs ${
-            imageryType === "CARTO_DARK"
-              ? "bg-violet-600 text-white shadow-[0_0_10px_rgba(139,92,246,0.4)]"
-              : "text-slate-400 hover:text-white"
-          }`}
-          title="Tactical Dark Cyber Basemap"
-        >
-          <span>Dark Grid</span>
-        </button>
+        <div className="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-mono font-bold text-xs">
+          <span>Aerial Satellite</span>
+        </div>
       </div>
 
-      {/* GPS Location Telemetry Badge (Top Left - Desktop/Tablet) */}
-      <div className="absolute top-3 left-3 z-20 font-mono text-[10px] text-cyan-300 bg-slate-950/90 px-3 py-1.5 rounded-xl border border-cyan-500/40 backdrop-blur-md shadow-lg hidden md:flex items-center gap-2">
+      {/* GPS Location Telemetry Badge (Bottom Left - Non-overlapping) */}
+      <div className="absolute bottom-3 left-3 z-20 font-mono text-[10px] text-cyan-300 bg-slate-950/90 px-3 py-1.5 rounded-xl border border-cyan-500/40 backdrop-blur-md shadow-lg hidden sm:flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
         <span>AIEM CAMPUS: 15.5948° N, 73.7947° E • ASSAGAO GOA</span>
       </div>
 
       {/* Admin Drag Notice Badge */}
       {adminMode && (
-        <div className="absolute bottom-4 left-4 z-20 font-mono text-xs bg-amber-500/20 text-amber-200 border-2 border-amber-400/70 px-3 py-1.5 rounded-xl backdrop-blur-md shadow-xl flex items-center gap-2 animate-pulse">
+        <div className="absolute bottom-12 left-3 z-20 font-mono text-xs bg-amber-500/20 text-amber-200 border-2 border-amber-400/70 px-3 py-1.5 rounded-xl backdrop-blur-md shadow-xl flex items-center gap-2 animate-pulse">
           <Move className="w-4 h-4 text-amber-400" />
           <span>
-            <strong>ADMIN MODE:</strong> Pins are draggable. Drag any pin to its exact rooftop or entrance to update.
+            <strong>ADMIN MODE:</strong> Drag any pin to its exact rooftop or entrance to update.
           </span>
         </div>
       )}
 
       {/* Status Notice Toast */}
       {statusNotice && (
-        <div className="absolute bottom-4 right-4 z-30 font-mono text-xs bg-emerald-950/95 text-emerald-200 border border-emerald-500/60 px-4 py-2 rounded-xl backdrop-blur-md shadow-2xl flex items-center gap-2">
+        <div className="absolute bottom-3 right-3 z-30 font-mono text-xs bg-emerald-950/95 text-emerald-200 border border-emerald-500/60 px-4 py-2 rounded-xl backdrop-blur-md shadow-2xl flex items-center gap-2">
           <Check className="w-4 h-4 text-emerald-400" />
           <span>{statusNotice}</span>
         </div>

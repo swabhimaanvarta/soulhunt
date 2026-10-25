@@ -184,6 +184,8 @@ export default function CampusMapPage() {
   const [quests, setQuests] = useState<any[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<CampusLocationPoint | null>(DEFAULT_AIEM_LOCATIONS[0]);
   const [filterType, setFilterType] = useState<"ALL" | "SAFE_DESK" | "QUESTS" | "LOST_FOUND">("ALL");
+  const [viewMode, setViewMode] = useState<"MAP" | "LIST">("MAP");
+  const [listSearch, setListSearch] = useState("");
   const [radarActive, setRadarActive] = useState(true);
   const [loading, setLoading] = useState(true);
 
@@ -437,6 +439,34 @@ export default function CampusMapPage() {
             <ExternalLink className="w-3 h-3 opacity-60" />
           </a>
 
+          {/* View Mode Switcher: Map vs Accessible Directory List */}
+          <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-white/10 text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => setViewMode("MAP")}
+              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === "MAP"
+                  ? "bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Map View</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("LIST")}
+              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                viewMode === "LIST"
+                  ? "bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" />
+              <span>List View</span>
+            </button>
+          </div>
+
           {/* Filter Pills */}
           <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-white/10 text-xs font-mono">
             {[
@@ -461,8 +491,9 @@ export default function CampusMapPage() {
         </div>
       </div>
 
-      {/* Main Map + Info Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {viewMode === "MAP" ? (
+        /* Main Map + Info Grid */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Real Satellite Map Surface */}
         <div className="lg:col-span-8 neon-block neon-block-emerald rounded-3xl p-6 border border-emerald-500/30 relative overflow-hidden min-h-[580px] flex flex-col justify-between shadow-[0_0_30px_rgba(16,185,129,0.15)]">
           {/* Top Radar HUD Telemetry */}
@@ -746,6 +777,143 @@ export default function CampusMapPage() {
           )}
         </div>
       </div>
+    ) : (
+      /* Accessible Campus Directory List View */
+      <div className="space-y-6">
+        {/* Search & Counter Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 glass-panel rounded-2xl p-4 border border-white/10 shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono text-slate-300 font-bold">
+              Showing {
+                filteredLocations.filter(
+                  (loc) =>
+                    !listSearch.trim() ||
+                    loc.name.toLowerCase().includes(listSearch.toLowerCase()) ||
+                    (loc.code || "").toLowerCase().includes(listSearch.toLowerCase()) ||
+                    (loc.description || "").toLowerCase().includes(listSearch.toLowerCase())
+                ).length
+              } of {locations.length} Campus Sectors
+            </span>
+          </div>
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Filter by sector name or code..."
+              value={listSearch}
+              onChange={(e) => setListSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 rounded-xl bg-slate-950/80 border border-white/10 text-xs font-mono text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-400"
+            />
+          </div>
+        </div>
+
+        {/* Location Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredLocations
+            .filter(
+              (loc) =>
+                !listSearch.trim() ||
+                loc.name.toLowerCase().includes(listSearch.toLowerCase()) ||
+                (loc.code || "").toLowerCase().includes(listSearch.toLowerCase()) ||
+                (loc.description || "").toLowerCase().includes(listSearch.toLowerCase())
+            )
+            .map((loc) => {
+              const { items: locItems, quests: locQuests } = getBuildingStats(loc._id, loc.code);
+              return (
+                <div
+                  key={loc._id}
+                  className={`rounded-3xl p-6 border transition-all flex flex-col justify-between group bg-slate-900/60 ${
+                    loc.isSafeDesk
+                      ? "border-emerald-500/30 hover:border-emerald-500/60 shadow-lg shadow-emerald-950/20"
+                      : "border-white/10 hover:border-cyan-500/40 shadow-lg shadow-slate-950/30"
+                  }`}
+                >
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-white/5 text-slate-300 border border-white/10">
+                        {loc.code}
+                      </span>
+                      {loc.isSafeDesk && (
+                        <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                          <Lock className="w-3 h-3 text-emerald-400" />
+                          Official Safe-Desk
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-base text-white group-hover:text-cyan-300 transition-colors">
+                        {loc.name}
+                      </h3>
+                      <p className="text-xs text-slate-400 leading-relaxed">
+                        {loc.description}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-white/5 text-xs font-mono text-slate-400">
+                      <div className="flex items-center justify-between">
+                        <span>Operating Hours:</span>
+                        <span className="text-slate-300">{loc.operatingHours || "08:30 AM - 05:00 PM"}</span>
+                      </div>
+                      {loc.floors && loc.floors.length > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span>Floors:</span>
+                          <span className="text-slate-300 truncate max-w-[180px] text-right">{loc.floors.join(", ")}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-[11px] text-cyan-400">
+                        <span>Coordinates:</span>
+                        <span>{loc.coordinates?.lat?.toFixed(4)}° N, {loc.coordinates?.lng?.toFixed(4)}° E</span>
+                      </div>
+                    </div>
+
+                    {/* Active Quests & Lost/Found Counts */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                      <Link
+                        href={`/quests?locationId=${loc._id}`}
+                        className="p-2.5 rounded-xl bg-slate-950/80 border border-white/5 hover:border-emerald-500/40 text-center transition-colors block"
+                      >
+                        <div className="text-xs font-mono font-bold text-emerald-400">{locQuests.length} Quests</div>
+                        <div className="text-[10px] font-mono text-slate-500">Active Hunts</div>
+                      </Link>
+                      <Link
+                        href={`/lost-and-found?locationId=${loc._id}`}
+                        className="p-2.5 rounded-xl bg-slate-950/80 border border-white/5 hover:border-cyan-500/40 text-center transition-colors block"
+                      >
+                        <div className="text-xs font-mono font-bold text-cyan-400">{locItems.length} Items</div>
+                        <div className="text-[10px] font-mono text-slate-500">Reported</div>
+                      </Link>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedLocation(loc);
+                        setViewMode("MAP");
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>View on Radar</span>
+                    </button>
+                    <a
+                      href={`https://www.google.com/maps/search/?api=1&query=${loc.coordinates?.lat},${loc.coordinates?.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-slate-300 hover:text-white font-mono text-xs flex items-center gap-1 transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Google Maps</span>
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
+    )}
 
       {/* Admin Location Edit Modal */}
       {editModalLoc && (

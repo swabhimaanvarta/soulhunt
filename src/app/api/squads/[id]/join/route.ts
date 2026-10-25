@@ -36,13 +36,34 @@ export async function POST(
       return apiError("SQUAD_FULL", `This squad is currently full (max ${memberCap} members).`, 400);
     }
 
-    if (squad.privacy !== "PUBLIC") {
+    // Clash of Clans rule: Closed squads do not accept join attempts
+    if (squad.joinType === "CLOSED" || squad.privacy === "PRIVATE") {
+      return apiError(
+        "SQUAD_CLOSED",
+        "This squad is currently closed to new recruits. No new join requests are accepted.",
+        403
+      );
+    }
+
+    // Clash of Clans rule: Minimum level requirement
+    const minLevel = squad.minLevelRequired || 1;
+    const userLevel = user.level || 1;
+    if (userLevel < minLevel) {
+      return apiError(
+        "MIN_LEVEL_NOT_MET",
+        `This squad requires Hunter Level ${minLevel} or higher to join (current: Level ${userLevel}). Complete more quests to qualify!`,
+        400
+      );
+    }
+
+    // Clash of Clans rule: Invite-only requires join request
+    if (squad.joinType === "INVITE_ONLY" || squad.privacy === "INVITE_ONLY") {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: "REQUIRES_JOIN_REQUEST",
-            message: "This squad is private or invite-only. Please submit a join request for officer review.",
+            message: "This squad is Invite Only. Please submit a join application for leadership review.",
           },
           requiresJoinRequest: true,
         },

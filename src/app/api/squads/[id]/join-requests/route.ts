@@ -85,6 +85,22 @@ export async function POST(
       return apiError("SQUAD_FULL", `Squad is full (maximum ${cap} members).`, 400);
     }
 
+    // Clash of Clans rule: Closed squads do not accept join requests
+    if (squad.joinType === "CLOSED" || squad.privacy === "PRIVATE") {
+      return apiError("SQUAD_CLOSED", "This squad is currently closed to new applications.", 403);
+    }
+
+    // Clash of Clans rule: Minimum level requirement
+    const minLevel = squad.minLevelRequired || 1;
+    const userLevel = user.level || 1;
+    if (userLevel < minLevel) {
+      return apiError(
+        "MIN_LEVEL_NOT_MET",
+        `This squad requires Hunter Level ${minLevel} or higher to apply (current: Level ${userLevel}).`,
+        400
+      );
+    }
+
     // Check existing pending request
     const existing = await SquadJoinRequest.findOne({
       squadId: squad._id,
@@ -119,6 +135,13 @@ export async function POST(
       { status: 201 }
     );
   } catch (error: any) {
+    if (error?.code === 11000) {
+      return apiError(
+        "REQUEST_PENDING",
+        "You already have a pending join request for this squad.",
+        409
+      );
+    }
     return apiServerError(error, "JOIN_REQUEST_CREATE_FAILED", "Failed to submit join request.");
   }
 }
@@ -257,3 +280,70 @@ export async function PATCH(
     return apiServerError(error, "JOIN_REQUEST_REVIEW_FAILED", "Failed to process join request.");
   }
 }
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    if (!Types.ObjectId.isValid(id)) {
+      return apiError("INVALID_SQUAD_ID", "Invalid squad identifier.", 400);
+    }
+    const user = await getCurrentUser();
+    if (!user) {
+      return apiError("UNAUTHORIZED", "Please log in to withdraw your request.", 401);
+    }
+    await connectDB();
+    const { searchParams } = new URL(req.url);
+    let reqId = searchParams.get("requestId");
+    if (!reqId) {
+      try {
+        const body = await req.json();
+        if (body && typeof body === "object" && body.requestId) {
+          reqId = String(body.requestId);
+        }
+      } catch {
+        // Body was empty or non-JSON
+      }
+    }
+
+    const query: any = {
+      squadId: new Types.ObjectId(id),
+      userId: user._id,
+      status: "PENDING",
+    };
+    if (reqId && Types.ObjectId.isValid(reqId)) {
+      query._id = new Types.ObjectId(reqId);
+    }
+
+    const joinReq = await SquadJoinRequest.findOne(query);
+
+    if (!joinReq) {
+      return apiError("REQUEST_NOT_FOUND", "No active pending join request found.", 404);
+    }
+
+    joinReq.status = "WITHDRAWN";
+    await joinReq.save();
+
+    await logAuditEvent({
+      actorId: user._id,
+      actorName: user.displayName,
+      actorRole: user.role,
+      action: "SQUAD_JOIN_WITHDRAWN",
+      targetType: "SQUAD",
+      targetId: new Types.ObjectId(id),
+      targetLabel: "Join Request",
+      reason: "Applicant voluntarily withdrew join request.",
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Join request withdrawn successfully.",
+      data: joinReq,
+    });
+  } catch (error: any) {
+    return apiServerError(error, "JOIN_REQUEST_WITHDRAW_FAILED", "Failed to withdraw join request.");
+  }
+}
+

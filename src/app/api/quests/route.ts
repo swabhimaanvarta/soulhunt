@@ -17,6 +17,8 @@ function encodeCursor(data: any): string {
   return Buffer.from(JSON.stringify(data), "utf-8").toString("base64");
 }
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     await connectDB();

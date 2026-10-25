@@ -84,17 +84,32 @@ export async function POST(req: NextRequest) {
     }
 
     // Check if claim is locked
-    if (claim.handoverLocked || (claim.handoverAttempts && claim.handoverAttempts >= 5)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "CLAIM_LOCKED",
-            message: "Handover verification locked due to excessive failed attempts. Contact a Campus Moderator.",
+    const isLocked = Boolean(
+      claim.handoverLocked || (claim.handoverAttempts && claim.handoverAttempts >= 5)
+    );
+    if (isLocked) {
+      if (claim.lockoutUntil && new Date() >= new Date(claim.lockoutUntil)) {
+        // Lockout window expired: reset lockout flags and allow verification to proceed
+        claim.handoverLocked = false;
+        claim.handoverAttempts = 0;
+        claim.lockoutUntil = null;
+        await ClaimRequest.findByIdAndUpdate(claim._id, {
+          handoverLocked: false,
+          handoverAttempts: 0,
+          lockoutUntil: null,
+        });
+      } else {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "HANDOVER_LOCKED",
+              message: "Handover verification locked due to excessive failed attempts. Contact Safe-Desk staff or wait for lockout expiry.",
+            },
           },
-        },
-        { status: 423 }
-      );
+          { status: 423 }
+        );
+      }
     }
 
     // Check code expiration (24 hour validity policy)
@@ -224,34 +239,38 @@ export async function POST(req: NextRequest) {
     const isMatch = await bcrypt.compare(handoverCode.trim(), claim.handoverCodeHash);
 
     if (!isMatch) {
+      const currentAttempts = (claim.handoverAttempts || 0) + 1;
+      const shouldLock = currentAttempts >= 5;
+
+      const updateDoc: any = {
+        $inc: { handoverAttempts: 1 },
+      };
+      if (shouldLock) {
+        updateDoc.$set = {
+          handoverLocked: true,
+          lockoutUntil: new Date(Date.now() + 15 * 60 * 1000),
+        };
+      }
+
       const updatedClaim = await ClaimRequest.findOneAndUpdate(
         { _id: claim._id, status: "APPROVED" },
-        { $inc: { handoverAttempts: 1 } },
+        updateDoc,
         { new: true }
       );
 
-      const attempts = updatedClaim?.handoverAttempts || (claim.handoverAttempts || 0) + 1;
-      const shouldLock = attempts >= 5;
-
-      if (shouldLock) {
-        await ClaimRequest.findByIdAndUpdate(claim._id, {
-          handoverLocked: true,
-          status: "LOCKED",
-        });
-      }
-
+      const attempts = updatedClaim?.handoverAttempts || currentAttempts;
       const remaining = Math.max(0, 5 - attempts);
       return NextResponse.json(
         {
           success: false,
           error: {
-            code: "CODE_MISMATCH",
+            code: shouldLock ? "HANDOVER_LOCKED" : "CODE_MISMATCH",
             message: shouldLock
-              ? "Maximum verification attempts exceeded. Claim ticket has been locked for security."
+              ? "Maximum verification attempts exceeded. Handover verification has been locked for 15 minutes."
               : `Invalid 6-digit recovery code. ${remaining} attempt(s) remaining before lock.`,
           },
         },
-        { status: 403 }
+        { status: shouldLock ? 423 : 403 }
       );
     }
 

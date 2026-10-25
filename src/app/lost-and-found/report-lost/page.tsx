@@ -68,15 +68,17 @@ export default function ReportLostItemPage() {
     setError(null);
 
     try {
+      const clientRequestId = `lost_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const res = await fetch("/api/items/lost", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, clientRequestId }),
       });
 
       const json = await res.json();
       if (!json.success) {
-        throw new Error(json.error || "Failed to submit lost item report.");
+        const errorMsg = json.error?.message || (typeof json.error === "string" ? json.error : "Failed to submit lost item report.");
+        throw new Error(errorMsg);
       }
 
       toast({
@@ -369,7 +371,7 @@ export default function ReportLostItemPage() {
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Deploying Quest to Campus Grid...</span>
+                <span>Submitting...</span>
               </>
             ) : (
               <>

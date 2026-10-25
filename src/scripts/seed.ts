@@ -1,3 +1,26 @@
+import fs from "fs";
+import path from "path";
+
+// Load .env.local natively if present
+try {
+  const envPath = path.resolve(process.cwd(), ".env.local");
+  if (fs.existsSync(envPath)) {
+    const lines = fs.readFileSync(envPath, "utf8").split("\n");
+    for (const line of lines) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match) {
+        const key = match[1];
+        let val = (match[2] || "").trim();
+        if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1);
+        if (val.startsWith("'") && val.endsWith("'")) val = val.slice(1, -1);
+        if (!process.env[key]) process.env[key] = val;
+      }
+    }
+  }
+} catch {
+  // ignore
+}
+
 import bcrypt from "bcryptjs";
 import { connectDB } from "../lib/db";
 import {
@@ -80,7 +103,7 @@ export async function runSeed() {
       code: "BLK-ADMIN",
       zoneType: "ACADEMIC_BLOCK",
       description: "Administration, Examination Cell, Principal's Office, and Basic Sciences & Humanities Department.",
-      coordinates: { lat: 15.5975, lng: 73.7943, mapX: 28, mapY: 16 },
+      coordinates: { lat: 15.5950, lng: 73.7940, mapX: 28, mapY: 16 },
       floors: ["Ground Floor", "1st Floor", "2nd Floor"],
       isSafeDesk: false,
     },
@@ -89,7 +112,7 @@ export async function runSeed() {
       code: "COMP-AI",
       zoneType: "ACADEMIC_BLOCK",
       description: "High-Performance Computing, AI/ML Labs, Cloud Computing Systems, and Room B-204 Digital Systems Lab.",
-      coordinates: { lat: 15.5979, lng: 73.7940, mapX: 18, mapY: 23 },
+      coordinates: { lat: 15.5952, lng: 73.7938, mapX: 18, mapY: 23 },
       floors: ["Ground Floor", "1st Floor", "2nd Floor"],
       isSafeDesk: false,
     },
@@ -98,7 +121,7 @@ export async function runSeed() {
       code: "MECH-ROBOT",
       zoneType: "ACADEMIC_BLOCK",
       description: "Automation workshops, CAD/CAM Lab, Robotics Arena, and CNC Machining Bay.",
-      coordinates: { lat: 15.5982, lng: 73.7948, mapX: 14, mapY: 34 },
+      coordinates: { lat: 15.5947, lng: 73.7935, mapX: 14, mapY: 34 },
       floors: ["Ground Floor", "1st Floor"],
       isSafeDesk: false,
     },
@@ -107,7 +130,7 @@ export async function runSeed() {
       code: "LIB-CENTRAL",
       zoneType: "LIBRARY",
       description: "Admin Block 2nd Floor — 400 sq. m open-access library, digital IEEE/NPTEL repository, and quiet study alcoves.",
-      coordinates: { lat: 15.5976, lng: 73.7945, mapX: 33, mapY: 22 },
+      coordinates: { lat: 15.5949, lng: 73.7943, mapX: 33, mapY: 22 },
       floors: ["2nd Floor Reading Hall", "Digital Wing"],
       isSafeDesk: false,
     },
@@ -116,7 +139,7 @@ export async function runSeed() {
       code: "CANTEEN-01",
       zoneType: "CANTEEN",
       description: "Student dining hub, shaded outdoor seating, and terrace patio.",
-      coordinates: { lat: 15.5968, lng: 73.7946, mapX: 34, mapY: 48 },
+      coordinates: { lat: 15.5944, lng: 73.7945, mapX: 34, mapY: 48 },
       floors: ["Ground Floor", "Terrace"],
       isSafeDesk: false,
     },
@@ -125,7 +148,7 @@ export async function runSeed() {
       code: "SPORTS-ARENA",
       zoneType: "SPORTS",
       description: "Football pitch, basketball and badminton courts, and outdoor athletic field.",
-      coordinates: { lat: 15.5962, lng: 73.7952, mapX: 76, mapY: 60 },
+      coordinates: { lat: 15.5941, lng: 73.7958, mapX: 76, mapY: 60 },
       floors: ["Open Ground"],
       isSafeDesk: false,
     },
@@ -134,7 +157,7 @@ export async function runSeed() {
       code: "SAFE-GATE",
       zoneType: "SAFE_DESK",
       description: "Assagao Main Entrance — 24/7 guarded security desk, visitor registration, and locked item deposit vaults.",
-      coordinates: { lat: 15.5960, lng: 73.7930, mapX: 47, mapY: 13 },
+      coordinates: { lat: 15.5955, lng: 73.7945, mapX: 47, mapY: 13 },
       floors: ["Ground Checkpoint"],
       isSafeDesk: true,
       operatingHours: "24/7 Guarded Station",
@@ -144,7 +167,7 @@ export async function runSeed() {
       code: "SAFE-LIB",
       zoneType: "SAFE_DESK",
       description: "Supervised handover counter at the Central Library entrance (Admin Block 2nd Floor).",
-      coordinates: { lat: 15.5976, lng: 73.7945, mapX: 33, mapY: 20 },
+      coordinates: { lat: 15.5949, lng: 73.7943, mapX: 33, mapY: 20 },
       floors: ["2nd Floor Entrance"],
       isSafeDesk: true,
       operatingHours: "08:30 AM - 06:30 PM",
@@ -154,7 +177,7 @@ export async function runSeed() {
       code: "ECE-G",
       zoneType: "ACADEMIC_BLOCK",
       description: "Embedded Systems, IoT Testbed, VLSI Design Lab, and G-Block Lecture Theatres.",
-      coordinates: { lat: 15.5971, lng: 73.7938, mapX: 26, mapY: 33 },
+      coordinates: { lat: 15.5946, lng: 73.7941, mapX: 26, mapY: 33 },
       floors: ["Ground Floor", "1st Floor"],
       isSafeDesk: false,
     },
@@ -163,7 +186,7 @@ export async function runSeed() {
       code: "AUD-MPH",
       zoneType: "ACADEMIC_BLOCK",
       description: "Major campus events, hackathons, seminars, and cultural festivals hall.",
-      coordinates: { lat: 15.5965, lng: 73.7935, mapX: 36, mapY: 78 },
+      coordinates: { lat: 15.5936, lng: 73.7944, mapX: 36, mapY: 78 },
       floors: ["Ground Floor", "Balcony"],
       isSafeDesk: false,
     },
@@ -211,6 +234,10 @@ export async function runSeed() {
       coins: 950,
       trustScore: 1000,
       trustTier: "ELITE_INVESTIGATOR",
+      equippedTitle: "Grand Archivist",
+      equippedFrame: "frame-amber-hud",
+      equippedTheme: "theme-obsidian-grid",
+      weeklyScore: 420,
     },
     {
       email: "mod@aiemgoa.ac.in",
@@ -228,6 +255,10 @@ export async function runSeed() {
       coins: 420,
       trustScore: 950,
       trustTier: "ELITE_INVESTIGATOR",
+      equippedTitle: "Campus Custody Guardian",
+      equippedFrame: "frame-cyan-matrix",
+      equippedTheme: "theme-cyber-cyan",
+      weeklyScore: 360,
     },
     {
       email: "rahul@aiemgoa.ac.in",
@@ -239,12 +270,16 @@ export async function runSeed() {
       role: "STUDENT",
       accountStatus: "ACTIVE",
       emailVerified: true,
-      xp: 1850,
-      level: 8,
-      rankTitle: "Field Investigator",
+      xp: 2450,
+      level: 9,
+      rankTitle: "Lead Field Investigator",
       coins: 310,
       trustScore: 780,
       trustTier: "TRUSTED_HUNTER",
+      equippedTitle: "Lead Deduction Specialist",
+      equippedFrame: "frame-cyan-matrix",
+      equippedTheme: "theme-cyber-cyan",
+      weeklyScore: 540,
     },
     {
       email: "vishnu@aiemgoa.ac.in",
@@ -256,12 +291,16 @@ export async function runSeed() {
       role: "STUDENT",
       accountStatus: "ACTIVE",
       emailVerified: true,
-      xp: 1620,
-      level: 7,
+      xp: 1980,
+      level: 8,
       rankTitle: "Field Investigator",
       coins: 245,
       trustScore: 710,
       trustTier: "TRUSTED_HUNTER",
+      equippedTitle: "Tactical Operative",
+      equippedFrame: "frame-amber-hud",
+      equippedTheme: "theme-obsidian-grid",
+      weeklyScore: 390,
     },
     {
       email: "aryan@aiemgoa.ac.in",
@@ -273,12 +312,15 @@ export async function runSeed() {
       role: "STUDENT",
       accountStatus: "ACTIVE",
       emailVerified: true,
-      xp: 1390,
+      xp: 1420,
       level: 6,
       rankTitle: "Field Investigator",
       coins: 190,
       trustScore: 640,
       trustTier: "TRUSTED_HUNTER",
+      equippedTitle: "Novice Seeker",
+      equippedFrame: "frame-neon-emerald",
+      weeklyScore: 210,
     },
     {
       email: "priya@aitdgoa.edu.in",
@@ -290,30 +332,83 @@ export async function runSeed() {
       role: "STUDENT",
       accountStatus: "ACTIVE",
       emailVerified: true,
-      xp: 1740,
-      level: 7,
-      rankTitle: "Field Investigator",
+      xp: 2890,
+      level: 10,
+      rankTitle: "Senior Detective",
       coins: 280,
       trustScore: 820,
-      trustTier: "TRUSTED_HUNTER",
+      trustTier: "ELITE_INVESTIGATOR",
+      equippedTitle: "Honorary Campus Guardian",
+      equippedFrame: "frame-violet-ring",
+      equippedTheme: "theme-violet-void",
+      weeklyScore: 680,
     },
   ]);
 
+  // Seed Squad 1: THE SEEKERS (Open)
   const theSeekers = await Squad.create({
     name: "THE SEEKERS",
     tag: "SEEK",
     description: "AIEM's premier rapid-response deduction squad.",
     emblemIcon: "Compass",
     privacy: "PUBLIC",
+    joinType: "OPEN",
+    minLevelRequired: 2,
     leaderId: rahul._id,
-    squadXp: 1450,
-    squadLevel: 5,
-    completedHuntsCount: 12,
+    squadXp: 1850,
+    squadLevel: 6,
+    memberCount: 3,
+    weeklyScore: 720,
+    completedHuntsCount: 14,
+  });
+
+  // Seed Squad 2: THE ARCHIVISTS (Invite Only)
+  const theArchivists = await Squad.create({
+    name: "THE ARCHIVISTS",
+    tag: "ARCH",
+    description: "Safe-Desk custody stewards and digital clue cryptographers.",
+    emblemIcon: "Shield",
+    privacy: "INVITE_ONLY",
+    joinType: "INVITE_ONLY",
+    minLevelRequired: 4,
+    leaderId: priya._id,
+    squadXp: 2600,
+    squadLevel: 8,
+    memberCount: 5,
+    weeklyScore: 890,
+    completedHuntsCount: 19,
+  });
+
+  // Seed Squad 3: NIGHT WATCH (Closed)
+  const nightWatch = await Squad.create({
+    name: "NIGHT WATCH",
+    tag: "WATCH",
+    description: "Specialized night perimeter reconnaissance and library surveillance unit.",
+    emblemIcon: "Target",
+    privacy: "PRIVATE",
+    joinType: "CLOSED",
+    minLevelRequired: 5,
+    leaderId: modUser._id,
+    squadXp: 3100,
+    squadLevel: 10,
+    memberCount: 8,
+    weeklyScore: 1050,
+    completedHuntsCount: 26,
   });
 
   await User.updateMany(
     { _id: { $in: [rahul._id, vishnu._id, aryan._id] } },
     { $set: { squadId: theSeekers._id } }
+  );
+
+  await User.updateOne(
+    { _id: priya._id },
+    { $set: { squadId: theArchivists._id } }
+  );
+
+  await User.updateOne(
+    { _id: modUser._id },
+    { $set: { squadId: nightWatch._id } }
   );
 
   await SquadMember.create([
@@ -322,8 +417,8 @@ export async function runSeed() {
       userId: rahul._id,
       role: "LEADER",
       squadRole: "LEADER",
-      contributedSquadXp: 850,
-      cluesSolvedForSquad: 7,
+      contributedSquadXp: 1100,
+      cluesSolvedForSquad: 9,
       joinedAt: new Date(Date.now() - 30 * 24 * 3600 * 1000),
     },
     {
@@ -331,8 +426,8 @@ export async function runSeed() {
       userId: vishnu._id,
       role: "COLEADER",
       squadRole: "COLEADER",
-      contributedSquadXp: 400,
-      cluesSolvedForSquad: 3,
+      contributedSquadXp: 550,
+      cluesSolvedForSquad: 4,
       joinedAt: new Date(Date.now() - 20 * 24 * 3600 * 1000),
     },
     {
@@ -343,6 +438,24 @@ export async function runSeed() {
       contributedSquadXp: 200,
       cluesSolvedForSquad: 2,
       joinedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000),
+    },
+    {
+      squadId: theArchivists._id,
+      userId: priya._id,
+      role: "LEADER",
+      squadRole: "LEADER",
+      contributedSquadXp: 1500,
+      cluesSolvedForSquad: 12,
+      joinedAt: new Date(Date.now() - 40 * 24 * 3600 * 1000),
+    },
+    {
+      squadId: nightWatch._id,
+      userId: modUser._id,
+      role: "LEADER",
+      squadRole: "LEADER",
+      contributedSquadXp: 2100,
+      cluesSolvedForSquad: 18,
+      joinedAt: new Date(Date.now() - 60 * 24 * 3600 * 1000),
     },
   ]);
 

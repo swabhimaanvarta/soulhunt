@@ -18,7 +18,7 @@ export async function GET(
       .populate(isStaff ? "linkedLostItemId" : "")
       .lean();
 
-    if (!rawQuest) {
+    if (!rawQuest || (rawQuest.status === "DRAFT" && !isStaff)) {
       return NextResponse.json(
         { success: false, error: { code: "QUEST_NOT_FOUND", message: "Quest not found." } },
         { status: 404 }

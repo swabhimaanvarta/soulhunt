@@ -45,14 +45,28 @@ export default function RewardsShopPage() {
 
   const handlePurchase = async (rewardId: string) => {
     if (purchasingId) return;
+
+    // Prevent duplicate purchase API calls for owned items
+    const targetReward = rewards.find((r) => String(r._id) === String(rewardId));
+    const isAlreadyOwned = Boolean(
+      user?.ownedCosmetics?.some((id: any) => String(id) === String(rewardId)) ||
+      (user?.equippedTitle && targetReward && user.equippedTitle === targetReward.title) ||
+      (user?.equippedFrame && targetReward && user.equippedFrame === targetReward.title)
+    );
+    if (isAlreadyOwned) {
+      setMessage({ text: "You already own this cosmetic item in your Armory.", error: true });
+      return;
+    }
+
     setPurchasingId(rewardId);
     setMessage(null);
 
     try {
+      const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const res = await fetch("/api/rewards/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rewardId }),
+        body: JSON.stringify({ rewardId, clientRequestId }),
       });
 
       const json = await res.json();
@@ -63,7 +77,16 @@ export default function RewardsShopPage() {
 
       setMessage({ text: json.message || "Acquired successfully!", error: false });
       if (user && json.data) {
-        setUser({ ...user, coins: json.data.coins, equippedTitle: json.data.equippedTitle });
+        const freshOwned = Array.isArray(user.ownedCosmetics)
+          ? [...user.ownedCosmetics, rewardId]
+          : [rewardId];
+        setUser({
+          ...user,
+          coins: json.data.coins,
+          equippedTitle: json.data.equippedTitle,
+          equippedFrame: json.data.equippedFrame,
+          ownedCosmetics: freshOwned,
+        });
       }
       fetchData();
     } catch (err: any) {
@@ -106,6 +129,15 @@ export default function RewardsShopPage() {
         </div>
       </div>
 
+      {/* 100% Cosmetic Disclaimer Banner */}
+      <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 text-cyan-200">
+        <Sparkles className="w-5 h-5 text-cyan-400 shrink-0" />
+        <div className="text-xs font-mono">
+          <span className="font-bold text-cyan-300 uppercase tracking-wide mr-2">[Armory Policy]</span>
+          <span>All items are cosmetic only — zero gameplay advantage</span>
+        </div>
+      </div>
+
       {message && (
         <div
           className={`p-4 rounded-2xl text-xs font-mono flex items-center gap-2 ${
@@ -131,6 +163,11 @@ export default function RewardsShopPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {rewards.map((reward) => {
+            const isOwned = Boolean(
+              user?.ownedCosmetics?.some((id: any) => String(id) === String(reward._id)) ||
+              (user?.equippedTitle && user.equippedTitle === reward.title) ||
+              (user?.equippedFrame && user.equippedFrame === reward.title)
+            );
             const canAfford = user && user.coins >= reward.coinCost;
             const meetsLevel = user && user.level >= reward.minLevelRequired;
             const isSoldOut = reward.stock === 0;
@@ -180,21 +217,28 @@ export default function RewardsShopPage() {
                   <button
                     type="button"
                     onClick={() => handlePurchase(reward._id)}
-                    disabled={purchasingId === reward._id || !canAfford || !meetsLevel || isSoldOut}
-                    className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer ${
-                      isSoldOut
-                        ? "bg-slate-800 text-slate-500"
+                    disabled={purchasingId === reward._id || isOwned || !canAfford || !meetsLevel || isSoldOut}
+                    className={`w-full py-2.5 rounded-xl text-xs font-mono font-bold transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed ${
+                      isOwned
+                        ? "bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 shadow-sm shadow-emerald-500/10 cursor-not-allowed"
+                        : isSoldOut
+                        ? "bg-slate-800 text-slate-500 cursor-not-allowed"
                         : !meetsLevel
-                        ? "bg-rose-950/40 border border-rose-500/30 text-rose-300"
+                        ? "bg-rose-950/40 border border-rose-500/30 text-rose-300 cursor-not-allowed"
                         : !canAfford
-                        ? "bg-slate-900 border border-white/10 text-slate-500"
-                        : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20"
+                        ? "bg-slate-900 border border-white/10 text-slate-500 cursor-not-allowed"
+                        : "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/20 cursor-pointer"
                     }`}
                   >
                     {purchasingId === reward._id ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         <span>Acquiring from Armory...</span>
+                      </>
+                    ) : isOwned ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>✓ Owned in Armory</span>
                       </>
                     ) : isSoldOut ? (
                       "Sold Out"

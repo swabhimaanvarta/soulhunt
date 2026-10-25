@@ -49,7 +49,10 @@ export async function PATCH(
     };
     const actorRole = getEffectiveRole(actorMember);
 
-    const targetMember = await SquadMember.findOne({ squadId: squad._id, userId: memberId }).populate("userId", "displayName username");
+    const targetMember = await SquadMember.findOne({
+      squadId: squad._id,
+      $or: [{ userId: memberId }, { _id: memberId }],
+    }).populate("userId", "displayName username");
     if (!targetMember) {
       return apiError("MEMBER_NOT_FOUND", "Target member not found in squad.", 404);
     }
@@ -132,9 +135,16 @@ export async function PATCH(
         }
       }
 
-      // Actor cannot alter role of equal or higher member
-      if (actorRole !== "LEADER" && targetCurrentRole === actorRole) {
-        return apiError("FORBIDDEN", "You cannot change the role of a member with equal rank.", 403);
+      const targetUserId = (targetMember.userId as any)?._id || targetMember.userId;
+
+      // Guardrail: Self-demotion is strictly prohibited
+      if (targetUserId.toString() === user._id.toString()) {
+        return apiError("FORBIDDEN", "Self-demotion is strictly prohibited. Use leadership transfer or leave squad instead.", 403);
+      }
+
+      // Guardrail: Cannot alter role of peer or higher-ranking member
+      if (ROLE_HIERARCHY[actorRole] <= ROLE_HIERARCHY[targetCurrentRole]) {
+        return apiError("FORBIDDEN", "You cannot modify the role of a peer or higher-ranking member.", 403);
       }
 
       const prevRole = targetMember.role;
@@ -196,15 +206,23 @@ export async function DELETE(
     }
     const actorRole = normalizeSquadRole(actorMember.role || actorMember.squadRole);
 
-    const targetMember = await SquadMember.findOne({ squadId: squad._id, userId: memberId }).populate("userId", "displayName username");
+    const targetMember = await SquadMember.findOne({
+      squadId: squad._id,
+      $or: [{ userId: memberId }, { _id: memberId }],
+    }).populate("userId", "displayName username");
     if (!targetMember) {
       return apiError("MEMBER_NOT_FOUND", "Target member not found in squad.", 404);
     }
     const targetRole = normalizeSquadRole(targetMember.role || targetMember.squadRole);
+    const targetUserId = (targetMember.userId as any)?._id || targetMember.userId;
 
-    const isSoleLeader = targetRole === "LEADER" && squad.leaderId.toString() === memberId;
+    const isSoleLeader = targetRole === "LEADER" && squad.leaderId.toString() === targetUserId.toString();
     if (isSoleLeader) {
       return apiError("LEADER_CANNOT_BE_REMOVED", "Cannot remove the squad Leader. Transfer leadership first.", 400);
+    }
+
+    if (targetUserId.toString() === user._id.toString()) {
+      return apiError("FORBIDDEN", "Self-removal via member removal is prohibited. Use the leave squad endpoint instead.", 403);
     }
 
     // Role-based hierarchy check
@@ -220,7 +238,7 @@ export async function DELETE(
     const reason = typeof body.reason === "string" ? body.reason.slice(0, 200) : "Removed by squad leadership";
 
     await SquadMember.deleteOne({ _id: targetMember._id });
-    await User.findByIdAndUpdate(memberId, { $unset: { squadId: 1 } });
+    await User.findByIdAndUpdate(targetUserId, { $unset: { squadId: 1 } });
 
     await logAuditEvent({
       actorId: user._id,

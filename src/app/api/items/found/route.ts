@@ -26,6 +26,8 @@ const FoundItemSchema = z.object({
   custodyStatus: z.enum(["SAFE_DESK", "FINDER_HELD", "ADMIN_OFFICE"]).default("SAFE_DESK"),
   currentCustodyLocationId: z.string().optional(),
   photoUrl: z.string().optional(),
+  rawPhotoUrl: z.string().optional(),
+  blurredPhotoUrl: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -58,6 +60,8 @@ export async function POST(req: NextRequest) {
       custodyStatus,
       currentCustodyLocationId,
       photoUrl,
+      rawPhotoUrl,
+      blurredPhotoUrl,
     } = parsed.data;
 
     // Sanitize PII & isolate identifiers
@@ -92,9 +96,13 @@ export async function POST(req: NextRequest) {
       // Non-blocking
     }
 
+    const effectiveRawPhoto = rawPhotoUrl || photoUrl || "";
+    const effectiveBlurredPhoto = blurredPhotoUrl || photoUrl || "";
+
     const foundItem = await FoundItem.create({
       finderId: user._id,
       title,
+      shortTitle: title.slice(0, 50),
       category,
       publicDescription: sanitizedText,
       foundLocationId: new Types.ObjectId(foundLocationId),
@@ -104,7 +112,12 @@ export async function POST(req: NextRequest) {
       currentCustodyLocationId: currentCustodyLocationId
         ? new Types.ObjectId(currentCustodyLocationId)
         : new Types.ObjectId(foundLocationId),
-      photoUrl: photoUrl || "/placeholder-item.png",
+      safeDeskLocationId: custodyStatus === "SAFE_DESK"
+        ? (currentCustodyLocationId ? new Types.ObjectId(currentCustodyLocationId) : new Types.ObjectId(foundLocationId))
+        : null,
+      photoUrl: photoUrl || effectiveBlurredPhoto || "/placeholder-item.png",
+      rawPhotoUrl: effectiveRawPhoto,
+      blurredPhotoUrl: effectiveBlurredPhoto,
       photoRequiresBlur,
       status: "ACTIVE",
       stateHistory: [

@@ -29,20 +29,17 @@ export async function GET(req: NextRequest) {
     const isOwnProfile = currentUser?._id && currentUser._id.toString() === targetUser._id.toString();
     const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "MODERATOR";
 
-    // Privacy check: If user made profile private, hide details from non-owners/non-staff
+    // Privacy check: If user made profile private, return strictly displayName and avatar to non-owners/non-staff
     if (!isOwnProfile && !isAdmin && targetUser.isProfilePublic === false) {
       return NextResponse.json({
         success: true,
         isOwnProfile: false,
         profileHidden: true,
         profile: {
-          _id: targetUser._id.toString(),
-          username: targetUser.username,
           displayName: targetUser.displayName,
-          avatarUrl: targetUser.avatarUrl,
+          avatar: targetUser.avatarUrl || `/avatars/${targetUser.avatarPreset || "recon"}.png`,
+          avatarUrl: targetUser.avatarUrl || `/avatars/${targetUser.avatarPreset || "recon"}.png`,
           avatarPreset: targetUser.avatarPreset || "recon",
-          rankTitle: targetUser.rankTitle,
-          level: targetUser.level,
           isProfilePublic: false,
         },
         activities: {
@@ -230,16 +227,53 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    const BUILTIN_AVATAR_PRESETS = ["recon", "sleuth", "vanguard", "sentinel", "shadow", "archivist"];
     if (body.avatarPreset !== undefined) {
-      user.avatarPreset = String(body.avatarPreset).trim().slice(0, 50);
+      const preset = String(body.avatarPreset).trim().toLowerCase();
+      if (!BUILTIN_AVATAR_PRESETS.includes(preset)) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "INVALID_AVATAR_PRESET",
+              message: `Invalid avatar preset '${preset}'. Must be one of built-in presets: ${BUILTIN_AVATAR_PRESETS.join(", ")}. Custom file uploads are not supported.`,
+            },
+          },
+          { status: 400 }
+        );
+      }
+      user.avatarPreset = preset;
+      user.avatarUrl = `/avatars/${preset}.png`;
     }
 
     if (body.avatarUrl !== undefined) {
-      user.avatarUrl = String(body.avatarUrl).trim().slice(0, 300);
+      const urlStr = String(body.avatarUrl).trim();
+      const isPresetUrl = BUILTIN_AVATAR_PRESETS.some((p) => urlStr === `/avatars/${p}.png`);
+      if (!isPresetUrl && urlStr !== "/avatars/default-hunter.png") {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "CUSTOM_AVATAR_PROHIBITED",
+              message: "Custom avatar file uploads and external image URLs are prohibited. Avatar customization is restricted to built-in presets only.",
+            },
+          },
+          { status: 400 }
+        );
+      }
+      user.avatarUrl = urlStr;
     }
 
     if (body.equippedTitle !== undefined) {
       user.equippedTitle = String(body.equippedTitle).trim().slice(0, 60);
+    }
+
+    if (body.equippedFrame !== undefined) {
+      user.equippedFrame = String(body.equippedFrame).trim().slice(0, 80);
+    }
+
+    if (body.equippedTheme !== undefined) {
+      user.equippedTheme = String(body.equippedTheme).trim().slice(0, 80);
     }
 
     if (body.isProfilePublic !== undefined) {
@@ -298,6 +332,8 @@ export async function PUT(req: NextRequest) {
         phoneNumber: user.phoneNumber,
         preferredContactMethod: user.preferredContactMethod,
         equippedTitle: user.equippedTitle,
+        equippedFrame: user.equippedFrame,
+        equippedTheme: user.equippedTheme,
         level: user.level,
         rankTitle: user.rankTitle,
         coins: user.coins,

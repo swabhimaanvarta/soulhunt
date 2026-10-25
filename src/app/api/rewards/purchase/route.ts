@@ -195,6 +195,9 @@ export async function POST(req: NextRequest) {
     } else if (reward.type === "FRAME") {
       equippedFrame = reward.metadata?.value || reward.previewAsset || "";
       await User.findByIdAndUpdate(user._id, { equippedFrame });
+    } else if (reward.type === "THEME") {
+      const equippedTheme = reward.metadata?.value || "theme-obsidian-grid";
+      await User.findByIdAndUpdate(user._id, { equippedTheme });
     }
 
     // 5. Create immutable Transaction record with unique idempotencyKey

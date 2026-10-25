@@ -38,6 +38,8 @@ function encodeCursor(data: any): string {
   return Buffer.from(JSON.stringify(data), "utf-8").toString("base64");
 }
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   try {
     await connectDB();
@@ -78,7 +80,9 @@ export async function GET(req: NextRequest) {
     } = parsed.data;
 
     const user = await getCurrentUser();
-    const isStaff = Boolean(user && (user.role === "ADMIN" || user.role === "MODERATOR"));
+    const isStaff = Boolean(
+      user && (user.role === "ADMIN" || user.role === "MODERATOR" || user.role === "SAFE_DESK_STAFF")
+    );
 
     const lostFilter: any = {};
     const foundFilter: any = {};

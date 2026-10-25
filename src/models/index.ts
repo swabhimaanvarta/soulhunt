@@ -286,7 +286,7 @@ const UserSchema = new Schema<IUser>(
       visitedBlocks: { type: [String], default: [] },
     },
     isProfilePublic: { type: Boolean, default: true },
-    isLeaderboardPublic: { type: Boolean, default: false },
+    isLeaderboardPublic: { type: Boolean, default: true },
     featuredAchievementIds: [{ type: Schema.Types.ObjectId, ref: "Achievement" }],
     weeklyScore: { type: Number, default: 0 },
     lastWeeklyReset: { type: Date, default: Date.now },
@@ -312,6 +312,8 @@ export interface ILostItem extends Document {
   currentClaimId?: Types.ObjectId | null;
   rewardOffered?: number;
   photoUrl?: string;
+  rawPhotoUrl?: string;
+  blurredPhotoUrl?: string;
   status: ItemLifecycleState;
   stateHistory: {
     state: ItemLifecycleState;
@@ -353,6 +355,9 @@ const LostItemSchema = new Schema<ILostItem>(
     spotDetails: { type: String, default: "" },
     lostAt: { type: Date, required: true },
     photos: { type: [String], default: [] },
+    photoUrl: { type: String, default: "" },
+    rawPhotoUrl: { type: String, default: "", select: false },
+    blurredPhotoUrl: { type: String, default: "" },
     recoveryPreference: {
       type: String,
       enum: ["HANDOVER_AT_SAFE_DESK", "DIRECT_CAMPUS_MEETUP", "MODERATOR_OFFICE"],
@@ -524,11 +529,19 @@ export interface IClaimRequest extends Document {
   handoverCodeExpiresAt?: Date;
   handoverAttempts: number;
   handoverLocked: boolean;
+  lockoutUntil?: Date | null;
   settlementIdempotencyKey?: string;
   settlementStatus?: "PENDING" | "COMPLETED" | "FAILED_RETRYABLE";
-  status: "PENDING" | "APPROVED" | "HANDOVER_COMPLETE" | "REJECTED" | "DISPUTED" | "LOCKED";
+  status:
+    | "PENDING"
+    | "APPROVED"
+    | "HANDOVER_COMPLETE"
+    | "REJECTED"
+    | "DISPUTED";
   reviewedBy?: Types.ObjectId | null;
   reviewedAt?: Date | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const ClaimRequestSchema = new Schema<IClaimRequest>(
@@ -545,6 +558,7 @@ const ClaimRequestSchema = new Schema<IClaimRequest>(
     handoverCodeExpiresAt: { type: Date },
     handoverAttempts: { type: Number, default: 0 },
     handoverLocked: { type: Boolean, default: false },
+    lockoutUntil: { type: Date, default: null },
     settlementIdempotencyKey: { type: String, sparse: true, index: true },
     settlementStatus: {
       type: String,
@@ -553,7 +567,7 @@ const ClaimRequestSchema = new Schema<IClaimRequest>(
     },
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "HANDOVER_COMPLETE", "REJECTED", "DISPUTED", "LOCKED"],
+      enum: ["PENDING", "APPROVED", "HANDOVER_COMPLETE", "REJECTED", "DISPUTED"],
       default: "PENDING",
     },
     reviewedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
@@ -783,7 +797,10 @@ const InvestigationSchema = new Schema<IInvestigation>(
   { timestamps: true }
 );
 
-export type SquadRole = "LEADER" | "COLEADER" | "ELDER" | "MEMBER" | "OFFICER";
+export type CanonicalSquadRole = "LEADER" | "COLEADER" | "ELDER" | "MEMBER";
+export type SquadRole =
+  | CanonicalSquadRole
+  | ("OFFICER" & { /** @deprecated Legacy role normalized to COLEADER; retained for call-site compatibility */ });
 
 export interface ISquad extends Document {
   name: string;
@@ -792,6 +809,8 @@ export interface ISquad extends Document {
   emblemIcon: string;
   bannerGradient: string;
   privacy: "PUBLIC" | "PRIVATE" | "INVITE_ONLY";
+  joinType?: "OPEN" | "INVITE_ONLY" | "CLOSED";
+  minLevelRequired?: number;
   leaderId: Types.ObjectId;
   squadXp: number;
   squadLevel: number;
@@ -816,6 +835,12 @@ const SquadSchema = new Schema<ISquad>(
       enum: ["PUBLIC", "PRIVATE", "INVITE_ONLY"],
       default: "PUBLIC",
     },
+    joinType: {
+      type: String,
+      enum: ["OPEN", "INVITE_ONLY", "CLOSED"],
+      default: "OPEN",
+    },
+    minLevelRequired: { type: Number, default: 1, min: 1, max: 10 },
     leaderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     squadXp: { type: Number, default: 0, index: true },
     squadLevel: { type: Number, default: 1 },
@@ -847,12 +872,12 @@ const SquadMemberSchema = new Schema<ISquadMember>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     role: {
       type: String,
-      enum: ["LEADER", "COLEADER", "ELDER", "MEMBER", "OFFICER"],
+      enum: ["LEADER", "COLEADER", "ELDER", "MEMBER"],
       default: "MEMBER",
     },
     squadRole: {
       type: String,
-      enum: ["LEADER", "COLEADER", "ELDER", "MEMBER", "OFFICER"],
+      enum: ["LEADER", "COLEADER", "ELDER", "MEMBER"],
       default: "MEMBER",
     },
     contributedSquadXp: { type: Number, default: 0 },
@@ -866,7 +891,7 @@ SquadMemberSchema.index({ squadId: 1, userId: 1 }, { unique: true });
 export interface ISquadJoinRequest extends Document {
   squadId: Types.ObjectId;
   userId: Types.ObjectId;
-  status: "PENDING" | "ACCEPTED" | "DECLINED";
+  status: "PENDING" | "ACCEPTED" | "DECLINED" | "WITHDRAWN";
   message?: string;
   createdAt: Date;
   reviewedAt?: Date | null;
@@ -880,7 +905,7 @@ const SquadJoinRequestSchema = new Schema<ISquadJoinRequest>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     status: {
       type: String,
-      enum: ["PENDING", "ACCEPTED", "DECLINED"],
+      enum: ["PENDING", "ACCEPTED", "DECLINED", "WITHDRAWN"],
       default: "PENDING",
       index: true,
     },
@@ -928,6 +953,10 @@ const SquadMessageSchema = new Schema<ISquadMessage>(
 );
 SquadMessageSchema.index({ squadId: 1, createdAt: -1, _id: -1 });
 SquadMessageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+SquadMessageSchema.index(
+  { squadId: 1, senderId: 1, requestId: 1 },
+  { unique: true, partialFilterExpression: { requestId: { $type: "string" } } }
+);
 
 export interface IAchievement extends Document {
   code: string;
@@ -1219,7 +1248,23 @@ const NotificationSchema = new Schema<INotification>(
     },
     title: { type: String, required: true },
     message: { type: String, required: true },
-    linkUrl: { type: String, default: "/dashboard" },
+    linkUrl: {
+      type: String,
+      default: "/dashboard",
+      validate: {
+        validator: function (v: string) {
+          if (!v) return true;
+          const trimmed = v.trim();
+          return (
+            trimmed.startsWith("/") &&
+            !trimmed.startsWith("//") &&
+            !trimmed.includes("\\") &&
+            !/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(trimmed)
+          );
+        },
+        message: "linkUrl must be a same-origin relative path only",
+      },
+    },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true }

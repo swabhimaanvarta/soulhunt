@@ -333,18 +333,19 @@ async function runAllHardeningTests() {
       failedPinAttempts++;
       await ClaimRequest.findByIdAndUpdate(claim._id, {
         $inc: { handoverAttempts: 1 },
-        $set: failedPinAttempts >= 5 ? { handoverLocked: true, status: "LOCKED" } : {},
+        $set: failedPinAttempts >= 5 ? { handoverLocked: true, lockoutUntil: new Date(Date.now() + 15 * 60 * 1000) } : {},
       });
     }
 
     let lockedClaim = await ClaimRequest.findById(claim._id);
-    assert(Boolean(lockedClaim?.handoverLocked), "5 failed PIN attempts trigger automatic ticket lockdown (LOCKED)");
-    assert(lockedClaim?.status === "LOCKED", "Claim status transitions to LOCKED upon limit breach");
+    assert(Boolean(lockedClaim?.handoverLocked), "5 failed PIN attempts trigger automatic ticket lockdown (handoverLocked)");
+    assert(lockedClaim?.status === "APPROVED", "Claim status preserves APPROVED upon limit breach with handoverLocked = true");
 
     // Reset lock for success path test
     await ClaimRequest.findByIdAndUpdate(claim._id, {
       handoverLocked: false,
       handoverAttempts: 0,
+      lockoutUntil: null,
       status: "APPROVED",
     });
 

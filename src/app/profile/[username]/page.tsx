@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Lock,
   ArrowLeft,
+  ArrowRight,
   Building,
   Sparkles,
   Edit3,
@@ -68,6 +69,7 @@ interface ProfileData {
     visitedBlocks?: string[];
   };
   squad?: {
+    _id?: string;
     name: string;
     tag: string;
     description: string;
@@ -112,6 +114,78 @@ const DEPARTMENTS = [
   "Administration & Campus Staff",
 ];
 
+const COSMETIC_FRAMES = [
+  {
+    id: "frame-emerald-pulse",
+    name: "Emerald Cyber Pulse",
+    border: "border-emerald-400",
+    shadow: "shadow-[0_0_20px_rgba(16,185,129,0.6)] ring-2 ring-emerald-400/40 animate-pulse",
+  },
+  {
+    id: "frame-cyan-matrix",
+    name: "Neon Cyan Matrix",
+    border: "border-cyan-400",
+    shadow: "shadow-[0_0_20px_rgba(6,182,212,0.7)] ring-2 ring-cyan-400/50",
+  },
+  {
+    id: "frame-amber-hud",
+    name: "Tactical HUD Amber",
+    border: "border-amber-400",
+    shadow: "shadow-[0_0_20px_rgba(245,158,11,0.6)] ring-2 ring-amber-400/40",
+  },
+  {
+    id: "frame-violet-ring",
+    name: "Void Violet Ring",
+    border: "border-violet-400",
+    shadow: "shadow-[0_0_20px_rgba(168,85,247,0.7)] ring-2 ring-violet-400/50",
+  },
+  {
+    id: "frame-obsidian",
+    name: "Obsidian Stealth",
+    border: "border-slate-500",
+    shadow: "shadow-[0_0_15px_rgba(100,116,139,0.5)] ring-1 ring-slate-400/20",
+  },
+];
+
+const COSMETIC_THEMES = [
+  {
+    id: "theme-obsidian-grid",
+    name: "Obsidian Grid (Tactical)",
+    bg: "bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 border-white/10",
+  },
+  {
+    id: "theme-emerald-recon",
+    name: "Emerald Recon",
+    bg: "bg-gradient-to-br from-slate-950 via-emerald-950/40 to-slate-900 border-emerald-500/30",
+  },
+  {
+    id: "theme-cyber-cyan",
+    name: "Cyberpunk Cyan",
+    bg: "bg-gradient-to-br from-slate-950 via-cyan-950/40 to-slate-900 border-cyan-500/30",
+  },
+  {
+    id: "theme-amber-tactical",
+    name: "Tactical Amber",
+    bg: "bg-gradient-to-br from-slate-950 via-amber-950/40 to-slate-900 border-amber-500/30",
+  },
+  {
+    id: "theme-violet-void",
+    name: "Void Violet",
+    bg: "bg-gradient-to-br from-slate-950 via-violet-950/40 to-slate-900 border-violet-500/30",
+  },
+];
+
+const COSMETIC_TITLES = [
+  "Campus Pathfinder",
+  "Campus Sleuth",
+  "Lead Decoder",
+  "Tactical Operative",
+  "Safe-Desk Custodian",
+  "Eagle Eye",
+  "The Campus Phantom",
+  "Grand Archivist",
+];
+
 export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -139,6 +213,10 @@ export default function UserProfilePage() {
     phoneNumber: string;
     preferredContactMethod: "EMAIL" | "PHONE" | "SAFE_DESK";
     avatarPreset: string;
+    equippedTitle: string;
+    equippedFrame: string;
+    equippedTheme: string;
+    featuredAchievementIds: string[];
     isProfilePublic: boolean;
     isLeaderboardPublic: boolean;
   }>({
@@ -150,9 +228,14 @@ export default function UserProfilePage() {
     phoneNumber: "",
     preferredContactMethod: "SAFE_DESK",
     avatarPreset: "recon",
+    equippedTitle: "Campus Pathfinder",
+    equippedFrame: "frame-emerald-pulse",
+    equippedTheme: "theme-obsidian-grid",
+    featuredAchievementIds: [],
     isProfilePublic: true,
     isLeaderboardPublic: true,
   });
+  const [previewAsVisitor, setPreviewAsVisitor] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
@@ -195,6 +278,10 @@ export default function UserProfilePage() {
           phoneNumber: data.profile.phoneNumber || "",
           preferredContactMethod: data.profile.preferredContactMethod || "SAFE_DESK",
           avatarPreset: data.profile.avatarPreset || "recon",
+          equippedTitle: data.profile.equippedTitle || "Campus Pathfinder",
+          equippedFrame: data.profile.equippedFrame || "frame-emerald-pulse",
+          equippedTheme: data.profile.equippedTheme || "theme-obsidian-grid",
+          featuredAchievementIds: data.profile.featuredAchievementIds || [],
           isProfilePublic: data.profile.isProfilePublic ?? true,
           isLeaderboardPublic: data.profile.isLeaderboardPublic ?? true,
         });
@@ -287,25 +374,31 @@ export default function UserProfilePage() {
   }
 
   if (profileHidden) {
+    const privateAvatar = AVATAR_PRESETS.find((p) => p.id === (profile?.avatarPreset || "recon")) || AVATAR_PRESETS[0];
+    const PrivateAvatarIcon = privateAvatar.icon;
+
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full glass-panel rounded-3xl p-8 border border-white/10 text-center space-y-4">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
-            <Lock className="w-8 h-8" />
+          <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto text-emerald-400">
+            <PrivateAvatarIcon className="w-8 h-8" />
           </div>
-          <h2 className="text-xl font-bold text-white">Private Investigator Profile</h2>
-          <p className="text-sm text-slate-400">
-            @{username} has chosen to keep their investigator activities and dossier confidential.
+          <h2 className="text-xl font-bold text-white">{profile?.displayName || "Investigator"}</h2>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-[11px] font-mono text-amber-300">
+            <Lock className="w-3.5 h-3.5" />
+            <span>Private Investigator Profile</span>
+          </div>
+          <p className="text-xs text-slate-400">
+            This investigator has chosen to keep their campus dossier, rankings, and activities confidential.
           </p>
-          <div className="p-3 rounded-xl bg-slate-900 border border-white/5 text-xs font-mono text-slate-300">
-            Level {profile?.level || 1} • {profile?.rankTitle || "Rookie Hunter"}
+          <div className="pt-2">
+            <Link
+              href="/dashboard"
+              className="inline-block px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all"
+            >
+              Return to HQ Dashboard
+            </Link>
           </div>
-          <Link
-            href="/dashboard"
-            className="inline-block px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all"
-          >
-            Return to HQ Dashboard
-          </Link>
         </div>
       </div>
     );
@@ -334,6 +427,22 @@ export default function UserProfilePage() {
   const xpInLevel = (profile.xp || 0) % 500;
   const xpProgressPct = Math.min(100, Math.round((xpInLevel / 500) * 100));
 
+  const currentTitle = previewAsVisitor ? editForm.equippedTitle : (profile.equippedTitle || "Campus Pathfinder");
+  const activeFrame = COSMETIC_FRAMES.find(
+    (f) => f.id === (previewAsVisitor ? editForm.equippedFrame : (profile.equippedFrame || "frame-emerald-pulse"))
+  ) || COSMETIC_FRAMES[0];
+  const activeTheme = COSMETIC_THEMES.find(
+    (t) => t.id === (previewAsVisitor ? editForm.equippedTheme : (profile.equippedTheme || "theme-obsidian-grid"))
+  ) || COSMETIC_THEMES[0];
+
+  const currentFeaturedIds = previewAsVisitor
+    ? editForm.featuredAchievementIds
+    : (profile.featuredAchievementIds || []);
+  const featuredAchievements = (activities.achievements || []).filter((ua: any) => {
+    const achId = ua.achievementId?._id?.toString() || ua.achievementId?.toString() || ua._id?.toString();
+    return currentFeaturedIds.includes(achId);
+  });
+
   return (
     <div className="min-h-screen bg-slate-950 text-white pb-20">
       {/* Top Banner & Breadcrumb */}
@@ -353,13 +462,27 @@ export default function UserProfilePage() {
 
           <div className="flex items-center gap-2">
             {isOwnProfile && (
-              <button
-                onClick={() => setActiveTab("settings")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold hover:bg-emerald-500/20 transition-all"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                Edit Profile
-              </button>
+              <>
+                <button
+                  onClick={() => setPreviewAsVisitor(!previewAsVisitor)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all ${
+                    previewAsVisitor
+                      ? "bg-amber-500/20 text-amber-300 border-amber-500/50 ring-1 ring-amber-400"
+                      : "bg-slate-900 border-white/10 text-slate-300 hover:text-white"
+                  }`}
+                  title="Toggle public visitor preview to see how other hunters view your profile"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  {previewAsVisitor ? "Exit Visitor Preview" : "Public Preview"}
+                </button>
+                <button
+                  onClick={() => setActiveTab("settings")}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold hover:bg-emerald-500/20 transition-all"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Edit Profile
+                </button>
+              </>
             )}
             <Link
               href="/lost-and-found"
@@ -373,17 +496,17 @@ export default function UserProfilePage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-6">
-        {/* Main Dossier Header Banner */}
-        <div className="relative rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900/90 to-slate-950 border border-white/10 p-6 md:p-8 shadow-2xl overflow-hidden">
+        {/* Main Dossier Header Banner styled with activeTheme */}
+        <div className={`relative rounded-3xl ${activeTheme.bg} border p-6 md:p-8 shadow-2xl overflow-hidden transition-all duration-300`}>
           {/* Cyber Accent Lines */}
           <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            {/* Left: Avatar & Identity */}
+            {/* Left: Avatar & Identity with activeFrame */}
             <div className="flex items-start sm:items-center gap-5">
               <div
-                className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 flex items-center justify-center shadow-2xl ${activeAvatar.border} ${activeAvatar.bg}`}
+                className={`relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl border-2 flex items-center justify-center transition-all ${activeAvatar.border} ${activeAvatar.bg} ${activeFrame.border} ${activeFrame.shadow}`}
               >
                 <AvatarIcon className="w-10 h-10 sm:w-12 sm:h-12" />
                 <span className="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase bg-slate-950 border border-white/20 text-white">
@@ -396,9 +519,9 @@ export default function UserProfilePage() {
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                     {profile.rankTitle}
                   </span>
-                  {profile.equippedTitle && (
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                      &ldquo;{profile.equippedTitle}&rdquo;
+                  {currentTitle && (
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono bg-gradient-to-r from-purple-500/20 to-pink-500/20 text-purple-200 border border-purple-500/40 font-bold shadow-sm shadow-purple-500/20">
+                      &ldquo;{currentTitle}&rdquo;
                     </span>
                   )}
                   {profile.role === "ADMIN" && (
@@ -430,6 +553,27 @@ export default function UserProfilePage() {
                     </>
                   )}
                 </div>
+
+                {/* Squad Syndicate Command Pill */}
+                {profile.squad && (
+                  <div className="pt-2">
+                    <Link
+                      href={`/squads/${profile.squad._id || ""}`}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-emerald-500/30 hover:border-emerald-500/60 transition-all font-mono text-xs group shadow-sm"
+                    >
+                      <div className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-[10px]">
+                        {profile.squad.tag}
+                      </div>
+                      <span className="text-white font-bold group-hover:text-emerald-300 transition-colors">
+                        {profile.squad.name}
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold">
+                        LVL {profile.squad.squadLevel || 1}
+                      </span>
+                      <ArrowRight className="w-3 h-3 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -483,6 +627,51 @@ export default function UserProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* Featured Achievements Showcase (Player's Pinned Honours) */}
+        {featuredAchievements.length > 0 && (
+          <div className="glass-panel rounded-3xl p-6 border border-white/10 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+              <h3 className="text-sm font-bold font-mono text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-400" />
+                Featured Honours &amp; Achievements
+              </h3>
+              <span className="text-[11px] font-mono text-slate-400">
+                Pinned Showcase ({featuredAchievements.length}/3)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {featuredAchievements.map((ua: any) => {
+                const ach = ua.achievementId || ua;
+                return (
+                  <div
+                    key={ach._id || ach.code}
+                    className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 hover:border-amber-500/30 transition-all space-y-2 group"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
+                        ach.rarity === "LEGENDARY" ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" :
+                        ach.rarity === "EPIC" ? "bg-purple-500/20 text-purple-300 border border-purple-500/40" :
+                        ach.rarity === "RARE" ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40" :
+                        "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                      }`}>
+                        {ach.rarity || "HONOUR"}
+                      </span>
+                      <Award className="w-4 h-4 text-amber-400 group-hover:rotate-12 transition-transform" />
+                    </div>
+                    <div className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors">
+                      {ach.title}
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">
+                      {ach.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Tab Navigation Navigation Bar */}
         <div className="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto no-scrollbar font-mono text-xs">
@@ -1075,9 +1264,138 @@ export default function UserProfilePage() {
                     <option value="PHONE">Direct Contact via Phone</option>
                     <option value="EMAIL">Official College Email Exchange</option>
                   </select>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Safe-Desk Drop guarantees physical verification by station staff before handover certification.
-                  </p>
+                </div>
+
+                {/* Profile Customization: Titles, Frames, Themes, and Featured Honours */}
+                <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/10 space-y-4">
+                  <div className="text-xs font-mono font-bold text-violet-300 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-violet-400" />
+                    COSMETIC CUSTOMIZATION &amp; ARMORY FLAIR
+                  </div>
+
+                  {/* Equipped Title */}
+                  <div>
+                    <label className="block text-xs font-mono text-slate-300 mb-1">
+                      EQUIPPED OPERATIVE TITLE
+                    </label>
+                    <select
+                      value={editForm.equippedTitle}
+                      onChange={(e) => setEditForm({ ...editForm, equippedTitle: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-violet-500"
+                    >
+                      {COSMETIC_TITLES.map((t) => (
+                        <option key={t} value={t}>
+                          &ldquo;{t}&rdquo;
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Avatar Frame Selector */}
+                  <div>
+                    <label className="block text-xs font-mono text-slate-300 mb-1.5">
+                      AVATAR FRAME GLOW
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {COSMETIC_FRAMES.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, equippedFrame: f.id })}
+                          className={`p-2 rounded-xl border text-left font-mono text-[10px] transition-all flex items-center gap-2 ${
+                            editForm.equippedFrame === f.id
+                              ? "bg-violet-500/20 border-violet-500 text-white ring-1 ring-violet-400"
+                              : "bg-slate-950/60 border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <div className={`w-3 h-3 rounded-full border-2 ${f.border}`} />
+                          <span className="truncate">{f.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Profile Theme Selector */}
+                  <div>
+                    <label className="block text-xs font-mono text-slate-300 mb-1.5">
+                      DOSSIER THEME
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {COSMETIC_THEMES.map((th) => (
+                        <button
+                          key={th.id}
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, equippedTheme: th.id })}
+                          className={`p-2 rounded-xl border text-left font-mono text-[10px] transition-all ${
+                            editForm.equippedTheme === th.id
+                              ? "bg-violet-500/20 border-violet-500 text-white ring-1 ring-violet-400"
+                              : "bg-slate-950/60 border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          <span className="truncate">{th.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pin Featured Achievements */}
+                  {activities.achievements?.length > 0 && (
+                    <div>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <label className="text-xs font-mono text-slate-300">
+                          FEATURED SHOWCASE HONOURS (MAX 3)
+                        </label>
+                        <span className="text-[10px] font-mono text-amber-400">
+                          {editForm.featuredAchievementIds?.length || 0}/3 Pinned
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto no-scrollbar pr-1">
+                        {activities.achievements.map((ua: any) => {
+                          const ach = ua.achievementId || ua;
+                          const achId = ach._id?.toString() || ach.code;
+                          const isPinned = editForm.featuredAchievementIds?.includes(achId);
+
+                          return (
+                            <label
+                              key={achId}
+                              className={`p-2 rounded-xl border flex items-center justify-between gap-2 cursor-pointer font-mono text-xs transition-colors ${
+                                isPinned
+                                  ? "bg-amber-500/10 border-amber-500/40 text-amber-200"
+                                  : "bg-slate-950/60 border-white/5 text-slate-400 hover:text-white"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Award className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                <span className="truncate text-[11px] font-bold">{ach.title}</span>
+                              </div>
+                              <input
+                                type="checkbox"
+                                checked={isPinned}
+                                onChange={(e) => {
+                                  const current = editForm.featuredAchievementIds || [];
+                                  if (e.target.checked) {
+                                    if (current.length < 3) {
+                                      setEditForm({
+                                        ...editForm,
+                                        featuredAchievementIds: [...current, achId],
+                                      });
+                                    }
+                                  } else {
+                                    setEditForm({
+                                      ...editForm,
+                                      featuredAchievementIds: current.filter((id) => id !== achId),
+                                    });
+                                  }
+                                }}
+                                disabled={!isPinned && (editForm.featuredAchievementIds?.length || 0) >= 3}
+                                className="rounded border-white/20 bg-slate-950 text-amber-500 focus:ring-amber-500/50"
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Privacy & Visibility Toggles */}

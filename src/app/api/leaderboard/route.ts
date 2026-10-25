@@ -74,8 +74,8 @@ export async function GET(req: NextRequest) {
       accountStatus: "ACTIVE",
       isLeaderboardPublic: { $ne: false },
     })
-      .select("displayName username avatarUrl level rankTitle xp weeklyScore trustTier stats.treasuresFound stats.questsCompleted department")
-      .populate("squadId", "name tag")
+      .select("displayName username avatarUrl level rankTitle xp weeklyScore trustTier stats.treasuresFound stats.questsCompleted stats.recoveriesCount department equippedTitle equippedFrame equippedTheme")
+      .populate("squadId", "name tag emblemIcon")
       .sort(hunterSort)
       .limit(30)
       .lean();
@@ -106,13 +106,14 @@ export async function GET(req: NextRequest) {
               }),
         });
 
+        const isPublic = dbUser.isLeaderboardPublic !== false;
         viewerPosition = {
           userId: dbUser._id.toString(),
-          rank: higherCount + 1,
+          rank: isPublic ? higherCount + 1 : null,
           xp: dbUser.xp,
           level: dbUser.level,
           weeklyScore: dbUser.weeklyScore || 0,
-          isLeaderboardPublic: dbUser.isLeaderboardPublic !== false,
+          isLeaderboardPublic: isPublic,
         };
       }
     }

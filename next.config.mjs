@@ -1,8 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  distDir: process.env.NEXT_DIST_DIR || '.next',
-  experimental: {},
+  experimental: {
+    cpus: 1,
+    workerThreads: false,
+  },
   async headers() {
     return [
       {

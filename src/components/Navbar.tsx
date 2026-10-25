@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -34,7 +34,7 @@ interface UserSession {
   email: string;
   username: string;
   displayName: string;
-  role: "STUDENT" | "MODERATOR" | "ADMIN";
+  role: "STUDENT" | "SAFE_DESK_STAFF" | "MODERATOR" | "ADMIN";
   level: number;
   rankTitle: string;
   coins: number;
@@ -58,7 +58,20 @@ export default function Navbar() {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
-  const fetchSession = async () => {
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications");
+      const json = await res.json();
+      if (json.success && json.data) {
+        setNotifications(json.data.notifications || []);
+        setUnreadNotifications(json.data.unreadCount || 0);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const fetchSession = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me");
       const json = await res.json();
@@ -77,26 +90,13 @@ export default function Navbar() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchNotifications = async () => {
-    try {
-      const res = await fetch("/api/notifications");
-      const json = await res.json();
-      if (json.success && json.data) {
-        setNotifications(json.data.notifications || []);
-        setUnreadNotifications(json.data.unreadCount || 0);
-      }
-    } catch {
-      // ignore
-    }
-  };
+  }, [fetchNotifications]);
 
   useEffect(() => {
     fetchSession();
     const interval = setInterval(fetchSession, 30000);
     return () => clearInterval(interval);
-  }, [pathname]);
+  }, [fetchSession, pathname]);
 
   // Close menus on route change
   useEffect(() => {
@@ -141,10 +141,9 @@ export default function Navbar() {
     desc?: string;
   }
 
-  // Navigation priorities: Lost & Found, Report, Map, Quests, Events
+  // Navigation priorities: Lost & Found, Map, Quests, Events
   const primaryNavLinks: NavItem[] = [
     { href: "/lost-and-found", label: "Lost & Found", icon: Search },
-    { href: "/lost-and-found/report-lost", label: "Report", icon: PlusCircle },
     { href: "/map", label: "Map", icon: MapPin },
     { href: "/quests", label: "Quests", icon: Compass },
     { href: "/events", label: "Events", icon: Calendar },
@@ -157,6 +156,9 @@ export default function Navbar() {
     { href: "/rewards", label: "Shop", icon: ShoppingBag, desc: "Hunter cosmetics & helpers" },
     { href: "/achievements", label: "Badges", icon: Award, desc: "Honors & citations" },
     { href: "/notifications", label: "Notifications", icon: Bell, desc: "Inbox & mission alerts" },
+    ...(user && (user.role === "SAFE_DESK_STAFF" || user.role === "ADMIN" || user.role === "MODERATOR")
+      ? [{ href: "/staff", label: "Safe-Desk", icon: Shield, desc: "Custody & Handover Station" }]
+      : []),
     ...(user && (user.role === "ADMIN" || user.role === "MODERATOR")
       ? [{ href: "/admin", label: "Admin Console", icon: Shield, desc: "Operations & CMS" }]
       : []),
@@ -174,11 +176,11 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0B0F17]/95 backdrop-blur-xl">
+      <header className="fixed top-0 left-0 right-0 z-50 w-full border-b border-white/10 bg-[#0B0F17]/95 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <div className="flex items-center gap-5 xl:gap-7">
+            <div className="flex items-center gap-4 xl:gap-6">
               <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-600 p-0.5 shadow-lg shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-all flex-shrink-0">
                   <div className="w-full h-full bg-[#0B0F17] rounded-[10px] flex items-center justify-center">
@@ -195,20 +197,27 @@ export default function Navbar() {
                 </div>
               </Link>
 
-              {/* Streamlined Desktop Navigation (lg:flex) with compact terms */}
-              <nav className="hidden lg:flex items-center gap-1">
-                {primaryNavLinks.map((link) => {
+              {/* Large Screens (xl+ / 1280px+): Display ALL core destinations directly */}
+              <nav className="hidden xl:flex items-center gap-1">
+                {[
+                  { href: "/lost-and-found", label: "Lost & Found", icon: Search },
+                  { href: "/map", label: "Map", icon: MapPin },
+                  { href: "/quests", label: "Quests", icon: Compass },
+                  { href: "/events", label: "Events", icon: Calendar },
+                  { href: "/squads", label: "Squads", icon: Users },
+                  { href: "/leaderboard", label: "Leaderboard", icon: Trophy },
+                  { href: "/rewards", label: "Shop", icon: ShoppingBag },
+                  { href: "/achievements", label: "Badges", icon: Award },
+                ].map((link) => {
                   const Icon = link.icon;
                   const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href + "/"));
                   return (
                     <Link
                       key={link.href}
                       href={link.href}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                         isActive
                           ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold"
-                          : link.highlight
-                          ? "text-amber-400 hover:bg-amber-400/10 border border-amber-400/20 font-bold"
                           : "text-slate-300 hover:text-white hover:bg-white/5"
                       }`}
                     >
@@ -218,7 +227,75 @@ export default function Navbar() {
                   );
                 })}
 
-                {/* More ▾ Dropdown */}
+                {/* Staff / Admin Quick Pill if authorized */}
+                {user && (user.role === "SAFE_DESK_STAFF" || user.role === "ADMIN" || user.role === "MODERATOR") && (
+                  <div className="relative ml-1">
+                    <button
+                      type="button"
+                      onClick={() => setMoreMenuOpen(!moreMenuOpen)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all"
+                    >
+                      <Shield className="w-3 h-3" />
+                      <span>Staff</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${moreMenuOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {moreMenuOpen && (
+                      <div className="absolute left-0 mt-2 w-52 rounded-2xl bg-slate-900 border border-white/10 shadow-2xl p-2 z-50 text-xs animate-in fade-in zoom-in-95 duration-150">
+                        {(user.role === "SAFE_DESK_STAFF" || user.role === "ADMIN" || user.role === "MODERATOR") && (
+                          <Link
+                            href="/staff"
+                            onClick={() => setMoreMenuOpen(false)}
+                            className="flex items-start gap-2.5 px-3 py-2 rounded-xl text-emerald-400 hover:bg-white/5 transition-all"
+                          >
+                            <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <div className="font-semibold text-white">Safe-Desk Station</div>
+                              <div className="text-[10px] text-slate-400 font-mono">Custody & Locker Handover</div>
+                            </div>
+                          </Link>
+                        )}
+                        {(user.role === "ADMIN" || user.role === "MODERATOR") && (
+                          <Link
+                            href="/admin"
+                            onClick={() => setMoreMenuOpen(false)}
+                            className="flex items-start gap-2.5 px-3 py-2 rounded-xl text-amber-400 hover:bg-white/5 transition-all"
+                          >
+                            <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <div className="font-semibold text-white">Admin Console</div>
+                              <div className="text-[10px] text-slate-400 font-mono">Operations & Content CMS</div>
+                            </div>
+                          </Link>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </nav>
+
+              {/* Medium / Large Screens (lg:flex xl:hidden): 5 Primary Links + "More ▾" */}
+              <nav className="hidden lg:flex xl:hidden items-center gap-1">
+                {primaryNavLinks.map((link) => {
+                  const Icon = link.icon;
+                  const isActive = pathname === link.href || (link.href !== "/" && pathname.startsWith(link.href + "/"));
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        isActive
+                          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold"
+                          : "text-slate-300 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span>{link.label}</span>
+                    </Link>
+                  );
+                })}
+
+                {/* More ▾ Dropdown on lg screens */}
                 <div className="relative">
                   <button
                     type="button"
@@ -354,6 +431,17 @@ export default function Navbar() {
                           >
                             <Users className="w-3.5 h-3.5 text-emerald-400" />
                             Squad: [{user.squad.tag}] {user.squad.name}
+                          </Link>
+                        )}
+
+                        {(user.role === "SAFE_DESK_STAFF" || user.role === "ADMIN" || user.role === "MODERATOR") && (
+                          <Link
+                            href="/staff"
+                            onClick={() => setUserMenuOpen(false)}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-emerald-400 hover:bg-emerald-400/10"
+                          >
+                            <Shield className="w-3.5 h-3.5" />
+                            Safe-Desk Station
                           </Link>
                         )}
 

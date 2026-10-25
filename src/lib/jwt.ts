@@ -2,7 +2,8 @@ import { SignJWT, jwtVerify } from "jose";
 
 function getSecretKey(): Uint8Array {
   const secret = process.env.JWT_SECRET;
-  if (process.env.NODE_ENV === "production") {
+  const isBuild = process.env.NEXT_PHASE === "phase-production-build" || process.env.npm_lifecycle_event === "build";
+  if (process.env.NODE_ENV === "production" && !isBuild) {
     if (!secret || secret.length < 32) {
       throw new Error(
         "FATAL: Production deployment requires a high-entropy JWT_SECRET environment variable (minimum 32 characters). Refusing to start."
@@ -10,7 +11,7 @@ function getSecretKey(): Uint8Array {
     }
     return new TextEncoder().encode(secret);
   }
-  // In development, allow local fallback
+  // In development or build phase, allow local fallback
   return new TextEncoder().encode(secret || "aiem-hunt-local-dev-secret-key-32-chars-long-minimum!");
 }
 
@@ -23,6 +24,8 @@ export interface SessionPayload {
   email: string;
   username: string;
   role: UserRole;
+  assignedStationId?: string;
+  assignedStationIds?: string[];
 }
 
 export function getSessionCookieOptions() {

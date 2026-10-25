@@ -3,6 +3,7 @@ import { connectDB } from "@/lib/db";
 import { Event } from "@/models";
 import { getCurrentUser } from "@/lib/auth";
 import { toPublicEventDTO } from "@/lib/event-dto";
+import { apiError } from "@/lib/api-response";
 
 export async function GET(
   req: NextRequest,
@@ -12,13 +13,11 @@ export async function GET(
     const { id } = await params;
     await connectDB();
     const user = await getCurrentUser();
+    const isStaff = Boolean(user && (user.role === "ADMIN" || user.role === "MODERATOR"));
 
-    const event = await Event.findById(id).lean();
-    if (!event) {
-      return NextResponse.json(
-        { success: false, error: "Event not found." },
-        { status: 404 }
-      );
+    const event: any = await Event.findById(id).lean();
+    if (!event || (event.status === "DRAFT" && !isStaff)) {
+      return apiError("EVENT_NOT_FOUND", "Event not found.", 404);
     }
 
     const currentUserId = user?._id?.toString() || null;

@@ -3,6 +3,7 @@ import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { Squad, SquadMember, User } from "@/models";
 import { getCurrentUser } from "@/lib/auth";
+import { normalizeSquadRole } from "@/lib/squadPermissions";
 import { logAuditEvent } from "@/lib/audit";
 import { apiError, apiServerError } from "@/lib/api-error";
 
@@ -32,7 +33,8 @@ export async function POST(
       return apiError("NOT_A_MEMBER", "You are not a member of this squad.", 400);
     }
 
-    const isLeader = squad.leaderId.toString() === user._id.toString();
+    const membershipRole = normalizeSquadRole(membership.role || membership.squadRole);
+    const isLeader = membershipRole === "LEADER" || squad.leaderId.toString() === user._id.toString();
     const otherMembersCount = await SquadMember.countDocuments({
       squadId: squad._id,
       userId: { $ne: user._id },

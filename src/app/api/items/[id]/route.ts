@@ -14,8 +14,21 @@ export async function GET(
     await connectDB();
     const user = await getCurrentUser();
 
-    // Check LostItem first
+    // Determine caller privilege level early (before DB query) so we can
+    // select sensitive fields only when the caller is entitled to them.
+    // Note: isOwner requires the populated reporter/finder ID which we get
+    // after the query; we do a second pass to decide final privilege.
+
+    const isStaff = Boolean(
+      user && (user.role === "ADMIN" || user.role === "MODERATOR" || user.role === "SAFE_DESK_STAFF")
+    );
+
+    // ------------------------------------------------------------------
+    // 1. Load LostItem — always select sensitive fields so owners / staff
+    //    receive them; we strip them for non-privileged callers below.
+    // ------------------------------------------------------------------
     let item: any = await LostItem.findById(id)
+      .select("+secretIdentifiers +verificationAnswerHash")
       .populate("reporterId", "displayName username avatarUrl department")
       .populate("lastKnownLocationId", "name code zoneType coordinates isSafeDesk operatingHours")
       .populate("linkedQuestId")
@@ -24,7 +37,9 @@ export async function GET(
     let itemType = "LOST";
 
     if (!item) {
+      // FoundItem: select rawPhotoUrl for owner / staff access
       item = await FoundItem.findById(id)
+        .select("+rawPhotoUrl")
         .populate("finderId", "displayName username avatarUrl department")
         .populate("foundLocationId", "name code zoneType coordinates")
         .populate("currentCustodyLocationId", "name code isSafeDesk operatingHours")
@@ -41,28 +56,32 @@ export async function GET(
       ((itemType === "LOST" && item.reporterId?._id?.toString() === user._id.toString()) ||
         (itemType === "FOUND" && item.finderId?._id?.toString() === user._id.toString()));
 
-    const isStaff = Boolean(user && (user.role === "ADMIN" || user.role === "MODERATOR"));
-
-    // Sanitize title for public viewing
+    // Sanitize title for all callers (PII strip on student IDs in title)
     item.title = sanitizeItemTitle(item.title || item.shortTitle);
 
-    // Mask secret identifiers, locker receipt codes, and raw photos if not owner and not staff
+    // ------------------------------------------------------------------
+    // 2. Redact sensitive fields for anonymous visitors and non-owner
+    //    signed-in users.  Owners and staff receive the full record.
+    // ------------------------------------------------------------------
     if (!isOwner && !isStaff) {
+      // Strip ALL secret / verification fields
       delete item.secretIdentifiers;
       delete item.verificationAnswerHash;
       delete item.lockerReceiptCode;
       delete item.rawPhotoUrl;
       delete item.spotDetails;
 
-      // Sanitize description for PII (phone, roll numbers, emails)
+      // Sanitize public description for PII (phone, roll numbers, emails)
       item.publicDescription = sanitizePublicDescription(item.publicDescription || "").sanitizedText;
 
-      // Zero-fallback photo rule: only blurred photo or empty string
+      // Photo rule: only serve approved blurred derivative; never raw uploads.
+      // The `photos` array on LostItem may contain unreviewed raw upload paths —
+      // replace both photos[] and photoUrl with the approved blurred image or empty.
       const safePhoto = item.blurredPhotoUrl || "";
       item.photoUrl = safePhoto;
       item.photos = safePhoto ? [safePhoto] : [];
 
-      // Mask reporter and finder identities from public/unauthorized view
+      // Mask reporter and finder identities
       delete item.reporterId;
       delete item.finderId;
       item.reportedByCommunityMember = true;
@@ -75,15 +94,17 @@ export async function GET(
         delete item.foundLocationId.coordinates;
       }
 
-      // Strip linked quest for non-owners and non-staff to prevent leaking mystery clues & answers
+      // Strip linked quest — prevents leaking mystery clues & answers
       delete item.linkedQuestId;
 
-      // Non-owners (both anonymous and signed-in) must NEVER receive the secret verification challenge question
+      // Signal whether a verification challenge exists (without revealing it)
       item.hasVerificationQuestion = Boolean(item.verificationQuestion);
       delete item.verificationQuestion;
     }
 
-    // Get claims: owner and staff see all; claimants see their own claim
+    // ------------------------------------------------------------------
+    // 3. Claims visibility: owners/staff see all; claimants see their own
+    // ------------------------------------------------------------------
     const allClaims = await ClaimRequest.find({ itemId: item._id })
       .populate("claimantId", "displayName username avatarUrl")
       .sort({ createdAt: -1 })
@@ -119,4 +140,3 @@ export async function GET(
     );
   }
 }
-

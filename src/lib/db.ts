@@ -2,6 +2,34 @@ import mongoose from "mongoose";
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/aiem_hunt";
 
+/**
+ * Validates that database URI strictly connects to a loopback host using mongodb: protocol,
+ * and if isTestRunner is true, ensures the database name begins with /aiem_hunt_test_.
+ * Immediately prints security alert and exits process if invalid.
+ */
+export function assertSafeConnectionUri(uri: string, isTestRunner: boolean = false): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch (e) {
+    console.error("[SECURITY ALERT] Invalid database URI format:", uri);
+    process.exit(1);
+  }
+  if (parsed.protocol !== "mongodb:") {
+    console.error("[SECURITY ALERT] Invalid protocol. Must be 'mongodb:':", parsed.protocol);
+    process.exit(1);
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (hostname !== "127.0.0.1" && hostname !== "localhost") {
+    console.error("[SECURITY ALERT] Disallowed database host. Must be 127.0.0.1 or localhost:", hostname);
+    process.exit(1);
+  }
+  if (isTestRunner && !parsed.pathname.startsWith("/aiem_hunt_test_")) {
+    console.error("[SECURITY ALERT] Test runner must connect to database starting with '/aiem_hunt_test_':", parsed.pathname);
+    process.exit(1);
+  }
+}
+
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -19,6 +47,9 @@ if (!global.mongooseCache) {
 }
 
 export async function connectDB(): Promise<typeof mongoose> {
+  const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/aiem_hunt";
+  assertSafeConnectionUri(uri, false);
+
   if (mongoose.connection.readyState === 1) {
     return mongoose;
   }
@@ -27,7 +58,6 @@ export async function connectDB(): Promise<typeof mongoose> {
     return cached.conn;
   }
 
-  const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/aiem_hunt";
 
   if (!cached.promise) {
     const opts: mongoose.ConnectOptions = {

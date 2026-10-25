@@ -4,7 +4,8 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root,
+  .dark {
     /* AIEM Hunt tactical dark theme — shadcn/ui HSL variables */
     --background: 222 47% 6%;
     --foreground: 210 40% 98%;

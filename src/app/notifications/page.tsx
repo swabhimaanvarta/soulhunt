@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -14,8 +13,7 @@ import {
   Gift,
   Star,
   ExternalLink,
-  Filter,
-  Check,
+  Loader2,
 } from "lucide-react";
 
 interface NotificationData {
@@ -42,8 +40,13 @@ const CATEGORY_CONFIG: Record<
 function sanitizeSameOriginPath(url?: string | null): string {
   if (!url) return "/dashboard";
   const trimmed = url.trim();
-  // Strictly disallow protocol-relative //, javascript:, http:, https:, etc.
-  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.includes("\\")) {
+  // Strictly disallow protocol-relative //, javascript:, http:, https:, vbscript:, etc.
+  if (
+    trimmed.startsWith("/") &&
+    !trimmed.startsWith("//") &&
+    !trimmed.includes("\\") &&
+    !/^[a-zA-Z][a-zA-Z0-9+.-]*:/i.test(trimmed)
+  ) {
     return trimmed;
   }
   return "/dashboard";
@@ -57,13 +60,19 @@ export default function NotificationsPage() {
   const [markingAll, setMarkingAll] = useState(false);
   const [pendingRowId, setPendingRowId] = useState<string | null>(null);
 
+  // Pagination state
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   // Filters
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
   const [filterUnreadOnly, setFilterUnreadOnly] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
+    setLoading(true);
     try {
-      let url = "/api/notifications?limit=50";
+      let url = "/api/notifications?limit=20";
       if (filterUnreadOnly) url += "&unread=true";
       if (selectedCategory !== "ALL") url += `&category=${selectedCategory}`;
 
@@ -74,8 +83,11 @@ export default function NotificationsPage() {
       }
       if (res.ok) {
         const json = await res.json();
-        setNotifications(json.data?.notifications || []);
+        const items = json.data?.notifications || [];
+        setNotifications(items);
         setUnreadCount(json.data?.unreadCount || 0);
+        setNextCursor(json.data?.pageInfo?.nextCursor || null);
+        setHasMore(Boolean(json.data?.pageInfo?.hasMore));
       }
     } catch {
       // offline fallback
@@ -87,6 +99,29 @@ export default function NotificationsPage() {
   useEffect(() => {
     fetchNotifications();
   }, [fetchNotifications]);
+
+  const loadMoreNotifications = async () => {
+    if (loadingMore || !nextCursor) return;
+    setLoadingMore(true);
+    try {
+      let url = `/api/notifications?limit=20&cursor=${encodeURIComponent(nextCursor)}`;
+      if (filterUnreadOnly) url += "&unread=true";
+      if (selectedCategory !== "ALL") url += `&category=${selectedCategory}`;
+
+      const res = await fetch(url);
+      if (res.ok) {
+        const json = await res.json();
+        const moreItems = json.data?.notifications || [];
+        setNotifications((prev) => [...prev, ...moreItems]);
+        setNextCursor(json.data?.pageInfo?.nextCursor || null);
+        setHasMore(Boolean(json.data?.pageInfo?.hasMore));
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const markAllRead = async () => {
     if (markingAll) return;
@@ -110,7 +145,7 @@ export default function NotificationsPage() {
     if (pendingRowId) return; // Prevent double navigation and double requests
     setPendingRowId(notif._id);
 
-    // Optimistically update local state
+    // Optimistically update local state idempotently
     if (!notif.isRead) {
       setNotifications((prev) =>
         prev.map((n) => (n._id === notif._id ? { ...n, isRead: true } : n))
@@ -181,7 +216,7 @@ export default function NotificationsPage() {
             <button
               onClick={markAllRead}
               disabled={markingAll}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-mono text-slate-200 hover:text-white hover:border-slate-600 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs font-mono text-slate-200 hover:text-white hover:border-slate-600 transition-colors disabled:opacity-50 cursor-pointer"
             >
               <CheckCheck className="w-4 h-4 text-emerald-400" />
               <span>{markingAll ? "Marking..." : "Mark all read"}</span>
@@ -193,7 +228,7 @@ export default function NotificationsPage() {
         <div className="max-w-4xl mx-auto px-4 pb-3 flex items-center gap-2 overflow-x-auto text-xs font-mono scrollbar-none">
           <button
             onClick={() => setFilterUnreadOnly(!filterUnreadOnly)}
-            className={`px-3 py-1 rounded-lg border transition-all flex items-center gap-1.5 whitespace-nowrap ${
+            className={`px-3 py-1 rounded-lg border transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
               filterUnreadOnly
                 ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                 : "bg-slate-900 border-white/5 text-slate-400 hover:text-white"
@@ -216,7 +251,7 @@ export default function NotificationsPage() {
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3 py-1 rounded-lg border transition-all whitespace-nowrap ${
+                  className={`px-3 py-1 rounded-lg border transition-all whitespace-nowrap cursor-pointer ${
                     active
                       ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                       : "bg-slate-900 border-white/5 text-slate-400 hover:text-white"
@@ -278,6 +313,27 @@ export default function NotificationsPage() {
                 onSelect={handleRowClick}
               />
             )}
+
+            {/* Pagination Controls */}
+            {hasMore && (
+              <div className="pt-4 text-center">
+                <button
+                  type="button"
+                  onClick={loadMoreNotifications}
+                  disabled={loadingMore}
+                  className="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 border border-white/10 rounded-xl text-xs font-mono font-bold text-slate-300 hover:text-white transition-all inline-flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                      <span>Loading more alerts...</span>
+                    </>
+                  ) : (
+                    <span>Load More Notifications</span>
+                  )}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -306,6 +362,7 @@ function NotificationSection({
           const config = CATEGORY_CONFIG[n.category] || CATEGORY_CONFIG.QUEST_SQUAD;
           const Icon = config.icon;
           const isPending = pendingRowId === n._id;
+          const safeLink = sanitizeSameOriginPath(n.linkUrl);
 
           return (
             <div
@@ -346,7 +403,7 @@ function NotificationSection({
                   <span className="text-[10px] font-mono text-slate-500 uppercase">
                     {config.label}
                   </span>
-                  {n.linkUrl && (
+                  {safeLink && (
                     <span className="text-[10px] font-mono text-cyan-400 group-hover:underline flex items-center gap-1">
                       View details <ExternalLink className="w-2.5 h-2.5" />
                     </span>

@@ -213,6 +213,7 @@ export async function DELETE(
     if (unlockedCount > 0) {
       achievement.isArchived = true;
       achievement.isActive = false;
+      achievement.version = (achievement.version || 1) + 1;
       await achievement.save();
 
       await logAuditEvent({

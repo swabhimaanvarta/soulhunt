@@ -286,6 +286,7 @@ async function runStagingPilotVerification() {
     await foundItem.save();
 
     // Reward finder idempotently
+    await Transaction.init();
     const idempotencyKey = `REWARD_FINDER_${foundItem._id}_${student._id}`;
     const rewardTx = await Transaction.create({
       userId: student._id,

@@ -37,7 +37,7 @@ export default function RootLayout({
           <RouteProgressBar />
         </Suspense>
         <Navbar />
-        <main className="flex-1 w-full max-w-full overflow-x-hidden">{children}</main>
+        <main className="flex-1 w-full max-w-full overflow-x-hidden pt-16">{children}</main>
         <MobileBottomNav />
         <Footer />
         <Toaster />
