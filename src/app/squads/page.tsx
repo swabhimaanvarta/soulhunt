@@ -136,13 +136,13 @@ export default function SquadsDirectoryPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs font-mono shadow-lg shadow-emerald-500/20 transition-all self-start md:self-auto"
+        <Link
+          href="/squads/create"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs font-mono shadow-lg shadow-emerald-500/20 transition-all self-start md:self-auto cursor-pointer"
         >
           <PlusCircle className="w-4 h-4" />
           Form New Squad
-        </button>
+        </Link>
       </div>
 
       {/* Search Bar */}

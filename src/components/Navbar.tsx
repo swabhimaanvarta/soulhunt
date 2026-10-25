@@ -13,7 +13,6 @@ import {
   ShoppingBag,
   Award,
   Bell,
-  PlusCircle,
   LogOut,
   ChevronDown,
   Coins,
@@ -370,15 +369,6 @@ export default function Navbar() {
                         {unreadNotifications > 99 ? "99+" : unreadNotifications}
                       </span>
                     )}
-                  </Link>
-
-                  {/* Quick Report Item Button */}
-                  <Link
-                    href="/lost-and-found/report-lost"
-                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all"
-                  >
-                    <PlusCircle className="w-3.5 h-3.5" />
-                    <span>+ Report</span>
                   </Link>
 
                   {/* User Profile Avatar Dropdown */}

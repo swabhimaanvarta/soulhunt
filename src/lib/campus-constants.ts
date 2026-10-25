@@ -1,5 +1,5 @@
-// AIEM Assagao Campus Centroid (15.5948° N, 73.7947° E)
-export const CAMPUS_CENTER: [number, number] = [15.5948, 73.7947];
+// AIEM Assagao Campus Centroid (15.5975° N, 73.7943° E - Agnel Institute of Engineering & Management)
+export const CAMPUS_CENTER: [number, number] = [15.5975, 73.7943];
 
 // Strict Campus + Immediate Periphery Bounds (prevents panning to world view)
 export const CAMPUS_BOUNDS_COORDS: [[number, number], [number, number]] = [

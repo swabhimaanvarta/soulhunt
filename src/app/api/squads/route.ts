@@ -8,7 +8,7 @@ import { apiError, apiServerError } from "@/lib/api-error";
 const CreateSquadSchema = z.object({
   name: z.string().min(3).max(30),
   tag: z.string().min(2).max(6).regex(/^[a-zA-Z0-9]+$/),
-  description: z.string().max(200).optional(),
+  description: z.string().max(300).optional(),
   emblemIcon: z.string().default("Shield"),
   privacy: z.enum(["PUBLIC", "INVITE_ONLY", "PRIVATE"]).optional(),
   joinType: z.enum(["OPEN", "INVITE_ONLY", "CLOSED"]).default("OPEN"),

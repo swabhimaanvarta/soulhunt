@@ -49,7 +49,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "BLK-ADMIN",
     zoneType: "ACADEMIC_BLOCK",
     description: "Administration, Examination Cell, Principal's Office, and Basic Sciences & Humanities Department.",
-    coordinates: { lat: 15.5950, lng: 73.7940 },
+    coordinates: { lat: 15.5975, lng: 73.7942 },
     floors: ["Ground Floor", "1st Floor", "2nd Floor"],
     isSafeDesk: false,
     operatingHours: "08:30 AM - 05:00 PM",
@@ -61,7 +61,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "SAFE-LIB",
     zoneType: "SAFE_DESK",
     description: "Admin Block 2nd Floor — Supervised custody station, digital repository, and silent study wing.",
-    coordinates: { lat: 15.5949, lng: 73.7943 },
+    coordinates: { lat: 15.5974, lng: 73.7944 },
     floors: ["2nd Floor Entrance"],
     isSafeDesk: true,
     operatingHours: "08:30 AM - 06:30 PM",
@@ -73,7 +73,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "COMP-AI",
     zoneType: "ACADEMIC_BLOCK",
     description: "High-Performance Computing, AI/ML Labs, Cloud Systems, and Room B-204 Digital Systems Lab.",
-    coordinates: { lat: 15.5952, lng: 73.7938 },
+    coordinates: { lat: 15.5977, lng: 73.7940 },
     floors: ["Ground Floor", "1st Floor", "2nd Floor"],
     isSafeDesk: false,
     operatingHours: "08:30 AM - 06:00 PM",
@@ -85,7 +85,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "ECE-G",
     zoneType: "ACADEMIC_BLOCK",
     description: "Embedded Systems, IoT Testbed, VLSI Design Lab, and G-Block Lecture Theatres.",
-    coordinates: { lat: 15.5946, lng: 73.7941 },
+    coordinates: { lat: 15.5973, lng: 73.7941 },
     floors: ["Ground Floor", "1st Floor"],
     isSafeDesk: false,
     operatingHours: "08:30 AM - 05:30 PM",
@@ -97,7 +97,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "MECH-ROBOT",
     zoneType: "ACADEMIC_BLOCK",
     description: "Automation workshops, CAD/CAM Lab, Heavy Machinery, Robotics Arena, and CNC Bay.",
-    coordinates: { lat: 15.5947, lng: 73.7935 },
+    coordinates: { lat: 15.5972, lng: 73.7937 },
     floors: ["Ground Floor", "1st Floor"],
     isSafeDesk: false,
     operatingHours: "08:30 AM - 05:30 PM",
@@ -109,7 +109,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "SAFE-GATE",
     zoneType: "SAFE_DESK",
     description: "Assagao Main Entrance — 24/7 guarded security desk, visitor registration, and electronic deposit lockers.",
-    coordinates: { lat: 15.5955, lng: 73.7945 },
+    coordinates: { lat: 15.5980, lng: 73.7947 },
     floors: ["Ground Checkpoint"],
     isSafeDesk: true,
     operatingHours: "24/7 Guarded Station",
@@ -121,7 +121,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "ARENA-FUTSAL",
     zoneType: "SPORTS",
     description: "All-weather artificial turf futsal arena, floodlit athletic courts, and inter-collegiate sports events.",
-    coordinates: { lat: 15.5948, lng: 73.7954 },
+    coordinates: { lat: 15.5970, lng: 73.7954 },
     floors: ["Ground Level"],
     isSafeDesk: false,
     operatingHours: "06:00 AM - 10:00 PM",
@@ -133,7 +133,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "CANTEEN-01",
     zoneType: "CANTEEN",
     description: "Student dining hub, shaded outdoor seating, discussion patio, and kiosk counters.",
-    coordinates: { lat: 15.5944, lng: 73.7945 },
+    coordinates: { lat: 15.5970, lng: 73.7946 },
     floors: ["Ground Floor", "Terrace"],
     isSafeDesk: false,
     operatingHours: "08:00 AM - 07:00 PM",
@@ -145,7 +145,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "SPORTS-ARENA",
     zoneType: "SPORTS",
     description: "Football pitch, cricket pavilion, athletics track, and open sports field.",
-    coordinates: { lat: 15.5941, lng: 73.7958 },
+    coordinates: { lat: 15.5968, lng: 73.7955 },
     floors: ["Open Stadium"],
     isSafeDesk: false,
     operatingHours: "06:00 AM - 08:00 PM",
@@ -157,7 +157,7 @@ const DEFAULT_AIEM_LOCATIONS: CampusLocationPoint[] = [
     code: "AUD-MPH",
     zoneType: "ACADEMIC_BLOCK",
     description: "Major campus events, hackathons, technical seminars, and south engineering workshops.",
-    coordinates: { lat: 15.5936, lng: 73.7944 },
+    coordinates: { lat: 15.5965, lng: 73.7944 },
     floors: ["Ground Floor", "Balcony"],
     isSafeDesk: false,
     operatingHours: "08:30 AM - 06:00 PM",
@@ -505,7 +505,7 @@ export default function CampusMapPage() {
               </span>
             </div>
             <div className="flex items-center gap-4 text-slate-400">
-              <span className="text-cyan-400">COORDS: 15.5948° N, 73.7947° E</span>
+              <span className="text-cyan-400">COORDS: 15.5975° N, 73.7943° E</span>
               <button
                 onClick={() => setRadarActive(!radarActive)}
                 className="text-[11px] px-2 py-0.5 rounded border border-white/20 hover:border-emerald-400 text-slate-300 transition-colors"
