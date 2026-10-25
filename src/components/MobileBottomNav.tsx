@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export default function MobileBottomNav() {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
   const [fabOpen, setFabOpen] = useState(false);
 
   // If in admin mode or print view, can keep or suppress

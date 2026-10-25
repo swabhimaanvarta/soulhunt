@@ -51,17 +51,17 @@ const LIFECYCLE_STATUSES = [
 
 function LostAndFoundDirectoryContent() {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || "/lost-and-found";
   const searchParams = useSearchParams();
 
   // URL state synchronization
-  const initialType = searchParams.get("type") || "ALL";
-  const initialCategory = searchParams.get("category") || "ALL";
-  const initialLocation = searchParams.get("locationId") || "ALL";
-  const initialStatus = searchParams.get("status") || "ALL";
-  const initialCustody = searchParams.get("custodyStatus") || "ALL";
-  const initialSort = searchParams.get("sort") || "newest";
-  const initialSearch = searchParams.get("search") || "";
+  const initialType = searchParams?.get("type") || "ALL";
+  const initialCategory = searchParams?.get("category") || "ALL";
+  const initialLocation = searchParams?.get("locationId") || "ALL";
+  const initialStatus = searchParams?.get("status") || "ALL";
+  const initialCustody = searchParams?.get("custodyStatus") || "ALL";
+  const initialSort = searchParams?.get("sort") || "newest";
+  const initialSearch = searchParams?.get("search") || "";
 
   const [typeFilter, setTypeFilter] = useState(initialType);
   const [categoryFilter, setCategoryFilter] = useState(initialCategory);
@@ -83,7 +83,7 @@ function LostAndFoundDirectoryContent() {
   // Sync state back to URL query parameters
   const updateQueryParams = useCallback(
     (params: Record<string, string>) => {
-      const sp = new URLSearchParams(searchParams.toString());
+      const sp = new URLSearchParams(searchParams ? searchParams.toString() : "");
       Object.entries(params).forEach(([key, val]) => {
         if (!val || val === "ALL" || (key === "sort" && val === "newest")) {
           sp.delete(key);

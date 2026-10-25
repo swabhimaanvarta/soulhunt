@@ -45,7 +45,7 @@ interface UserSession {
 }
 
 export default function Navbar() {
-  const pathname = usePathname();
+  const pathname = usePathname() || "";
   const router = useRouter();
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState(true);

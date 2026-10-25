@@ -18,7 +18,7 @@ import {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectUrl = searchParams.get("redirect") || "/";
+  const redirectUrl = searchParams?.get("redirect") || "/";
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
