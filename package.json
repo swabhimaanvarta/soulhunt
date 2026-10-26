@@ -11,6 +11,7 @@
     "seed": "tsx src/scripts/seed.ts",
     "test": "tsx src/scripts/run_safe_tests.ts",
     "test:concurrency": "tsx src/scripts/test_concurrency_and_scoping.ts",
+    "test:personas": "tsx src/scripts/test_personas_and_full_lifecycle.ts",
     "test:viewports": "node src/scripts/test_responsive_viewports.js",
     "test:system": "node src/scripts/test_all_system.js"
   },
