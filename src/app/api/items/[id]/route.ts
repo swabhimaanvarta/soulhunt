@@ -119,12 +119,63 @@ export async function GET(
       );
     }
 
+    // ------------------------------------------------------------------
+    // 4. Safe Community Match Suggestions (Never reveals secret clues)
+    // ------------------------------------------------------------------
+    let possibleMatches: any[] = [];
+    try {
+      if (itemType === "LOST") {
+        const matches = await FoundItem.find({
+          category: item.category,
+          status: { $in: ["ACTIVE", "CLAIMED"] },
+        })
+          .select("title shortTitle category publicDescription photoUrl blurredPhotoUrl foundLocationId createdAt")
+          .populate("foundLocationId", "name code")
+          .sort({ createdAt: -1 })
+          .limit(4)
+          .lean();
+
+        possibleMatches = matches.map((m: any) => ({
+          _id: m._id,
+          title: sanitizeItemTitle(m.title || m.shortTitle),
+          category: m.category,
+          locationName: m.foundLocationId?.name || "AIEM Campus",
+          photoUrl: m.blurredPhotoUrl || m.photoUrl || "",
+          createdAt: m.createdAt,
+          itemType: "FOUND",
+        }));
+      } else {
+        const matches = await LostItem.find({
+          category: item.category,
+          status: { $in: ["ACTIVE", "CLAIMED"] },
+        })
+          .select("title shortTitle category publicDescription photoUrl blurredPhotoUrl lastKnownLocationId createdAt")
+          .populate("lastKnownLocationId", "name code")
+          .sort({ createdAt: -1 })
+          .limit(4)
+          .lean();
+
+        possibleMatches = matches.map((m: any) => ({
+          _id: m._id,
+          title: sanitizeItemTitle(m.title || m.shortTitle),
+          category: m.category,
+          locationName: m.lastKnownLocationId?.name || "AIEM Campus",
+          photoUrl: m.blurredPhotoUrl || m.photoUrl || "",
+          createdAt: m.createdAt,
+          itemType: "LOST",
+        }));
+      }
+    } catch {
+      possibleMatches = [];
+    }
+
     return NextResponse.json({
       success: true,
       data: {
         ...item,
         itemType,
         claims: visibleClaims,
+        possibleMatches,
         isOwner: Boolean(isOwner),
         isStaff: Boolean(isStaff),
         isAuthenticated: Boolean(user),

@@ -18,6 +18,7 @@ import {
   User,
   ArrowRight,
   Sparkles,
+  ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -463,6 +464,59 @@ export default function ItemDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Safe Community Match Suggestions */}
+      {item.possibleMatches && item.possibleMatches.length > 0 && (
+        <div className="glass-panel rounded-3xl p-6 md:p-8 border border-cyan-500/20 bg-cyan-950/10 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-cyan-500/20 pb-3">
+            <div className="space-y-1">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span>Possible Campus Matches ({item.possibleMatches.length})</span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Privacy-safe suggestions matching this {item.category} item. Private claim clues and answers remain strictly protected.
+              </p>
+            </div>
+            <span className="text-[10px] font-mono uppercase bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2.5 py-0.5 rounded-full w-fit">
+              AIEM Match Matrix
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+            {item.possibleMatches.map((match: any) => (
+              <Link
+                key={match._id}
+                href={`/items/${match._id}`}
+                className="group rounded-2xl bg-slate-900/90 border border-white/10 hover:border-cyan-500/40 p-3.5 space-y-3 transition-all hover:-translate-y-0.5 shadow-md flex flex-col justify-between"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-[10px] font-mono">
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                      {match.category}
+                    </span>
+                    <span className="text-slate-500">
+                      {new Date(match.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <h3 className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors line-clamp-1">
+                    {match.title}
+                  </h3>
+                  <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                    <MapPin className="w-3 h-3 text-cyan-400 shrink-0" />
+                    <span className="truncate">{match.locationName}</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px] font-mono text-cyan-400 group-hover:translate-x-0.5 transition-transform">
+                  <span>Inspect Belonging</span>
+                  <ExternalLink className="w-3 h-3" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Claim & Dual Handover Verification Hub */}
       <div className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-6">
