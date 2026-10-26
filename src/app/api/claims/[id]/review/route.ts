@@ -115,15 +115,15 @@ export async function POST(
         await itemDoc.save();
       }
 
-      // 3. Deliver notifications with PIN to the receiving party
+      // 3. Deliver notifications to participants without leaking plaintext PIN in notifications
       if (isLostItem) {
         // In LOST flow: claimant is the finder (custodian); counterparty is the owner (receiving party)
-        // Owner receives the PIN to show the finder upon handover
+        // Owner receives notification to view the recovery pass on the item page
         await Notification.create({
           userId: claim.counterpartyUserId,
           category: "CLAIM_UPDATE",
-          title: "Claim Approved — Recovery PIN Generated",
-          message: `Your lost item claim is approved! Your 6-digit recovery PIN is ${handoverCode}. Give this PIN to the finder when you receive your item.`,
+          title: "Claim Approved — Recovery Pass Ready",
+          message: "Your lost item claim has been approved! Visit your item page to view your confidential 6-digit recovery pass and coordinate handover.",
           linkUrl: `/items/${claim.itemId}`,
         });
 
@@ -132,17 +132,17 @@ export async function POST(
           userId: claim.claimantId,
           category: "CLAIM_UPDATE",
           title: "Found Claim Approved — Ready for Handover",
-          message: `Your report that you found this item was approved! Meet the owner to hand over the item and enter their 6-digit PIN to verify.`,
+          message: "Your report that you found this item was approved! Meet the owner to hand over the item and enter their 6-digit recovery code to verify.",
           linkUrl: `/items/${claim.itemId}`,
         });
       } else {
         // In FOUND flow: counterparty is the finder (custodian); claimant is the owner (receiving party)
-        // Claimant receives the PIN to show the finder/safe-desk
+        // Claimant receives notification to view the recovery pass on the item page
         await Notification.create({
           userId: claim.claimantId,
           category: "CLAIM_UPDATE",
-          title: "Claim Approved — Recovery PIN Generated",
-          message: `Your claim was approved! Your 6-digit handover PIN is ${handoverCode}. Present this PIN to the custodian to receive your item.`,
+          title: "Claim Approved — Recovery Pass Ready",
+          message: "Your claim has been approved! Visit the item page to view your confidential 6-digit recovery pass and coordinate handover.",
           linkUrl: `/items/${claim.itemId}`,
         });
 

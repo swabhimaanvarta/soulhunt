@@ -210,6 +210,8 @@ export interface IUser extends Document {
   avatarPreset?: string;
   isProfilePublic?: boolean;
   isLeaderboardPublic?: boolean;
+  identityMode?: "PSEUDONYMOUS" | "ANONYMOUS" | "PUBLIC";
+  publicAttributionPreference?: "HANDLE" | "ANONYMOUS";
   featuredAchievementIds?: Types.ObjectId[];
   weeklyScore?: number;
   lastWeeklyReset?: Date;
@@ -287,6 +289,16 @@ const UserSchema = new Schema<IUser>(
     },
     isProfilePublic: { type: Boolean, default: true },
     isLeaderboardPublic: { type: Boolean, default: true },
+    identityMode: {
+      type: String,
+      enum: ["PSEUDONYMOUS", "ANONYMOUS", "PUBLIC"],
+      default: "PSEUDONYMOUS",
+    },
+    publicAttributionPreference: {
+      type: String,
+      enum: ["HANDLE", "ANONYMOUS"],
+      default: "HANDLE",
+    },
     featuredAchievementIds: [{ type: Schema.Types.ObjectId, ref: "Achievement" }],
     weeklyScore: { type: Number, default: 0 },
     lastWeeklyReset: { type: Date, default: Date.now },
@@ -522,6 +534,7 @@ export interface IClaimRequest extends Document {
   claimantId: Types.ObjectId;
   counterpartyUserId: Types.ObjectId;
   submittedAnswer: string;
+  answerMatched?: boolean;
   proofPhotoUrl?: string;
   notes: string;
   handoverCode?: string;
@@ -551,6 +564,7 @@ const ClaimRequestSchema = new Schema<IClaimRequest>(
     claimantId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     counterpartyUserId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     submittedAnswer: { type: String, default: "" },
+    answerMatched: { type: Boolean, default: false },
     proofPhotoUrl: { type: String, default: "" },
     notes: { type: String, default: "" },
     handoverCode: { type: String, select: false },
@@ -1434,5 +1448,40 @@ HintUnlockSchema.index({ investigationId: 1, stageOrder: 1 }, { unique: true });
 
 export const HintUnlock: Model<IHintUnlock> =
   mongoose.models.HintUnlock || mongoose.model<IHintUnlock>("HintUnlock", HintUnlockSchema);
+
+export interface IHandoverMessage extends Document {
+  claimId: Types.ObjectId;
+  senderId: Types.ObjectId;
+  text: string;
+  isPreset: boolean;
+  presetCode?: string;
+  isReported: boolean;
+  reportedBy?: Types.ObjectId | null;
+  reportReason?: string;
+  expiresAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const HandoverMessageSchema = new Schema<IHandoverMessage>(
+  {
+    claimId: { type: Schema.Types.ObjectId, ref: "ClaimRequest", required: true, index: true },
+    senderId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    text: { type: String, required: true, maxlength: 500, trim: true },
+    isPreset: { type: Boolean, default: false },
+    presetCode: { type: String, default: "" },
+    isReported: { type: Boolean, default: false },
+    reportedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    reportReason: { type: String, default: "" },
+    expiresAt: { type: Date, required: true },
+  },
+  { timestamps: true }
+);
+
+HandoverMessageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+HandoverMessageSchema.index({ claimId: 1, createdAt: 1 });
+
+export const HandoverMessage: Model<IHandoverMessage> =
+  mongoose.models.HandoverMessage || mongoose.model<IHandoverMessage>("HandoverMessage", HandoverMessageSchema);
 
 

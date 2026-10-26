@@ -147,24 +147,10 @@ export async function POST(
     }
 
     // Check if verification answer matches (if item had a verificationAnswerHash)
-    let autoApproved = false;
+    let answerMatched = false;
     if (lostItem?.verificationAnswerHash && answerProvided) {
       const cleanAnswer = answerProvided.toLowerCase().trim();
-      const isMatch = await bcrypt.compare(cleanAnswer, lostItem.verificationAnswerHash);
-      if (isMatch) {
-        autoApproved = true;
-      }
-    }
-
-    // Generate cryptographic 6-digit random handover PIN if autoApproved
-    let handoverCode: string | undefined = undefined;
-    let handoverCodeHash: string | undefined = undefined;
-    let handoverCodeExpiresAt: Date | undefined = undefined;
-
-    if (autoApproved) {
-      handoverCode = crypto.randomInt(100000, 1000000).toString();
-      handoverCodeHash = await bcrypt.hash(handoverCode, 10);
-      handoverCodeExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour validity policy
+      answerMatched = await bcrypt.compare(cleanAnswer, lostItem.verificationAnswerHash);
     }
 
     const claim = await ClaimRequest.create({
@@ -173,61 +159,50 @@ export async function POST(
       claimantId: user._id,
       counterpartyUserId,
       submittedAnswer: answerProvided || "",
+      answerMatched,
       proofPhotoUrl: proofPhotoUrl || "",
       notes: proofText,
-      status: autoApproved ? "APPROVED" : "PENDING",
-      ...(autoApproved
-        ? {
-            handoverCode,
-            handoverCodeHash,
-            handoverCodeExpiresAt,
-            handoverAttempts: 0,
-            handoverLocked: false,
-          }
-        : {}),
+      status: "PENDING",
+      handoverAttempts: 0,
+      handoverLocked: false,
     });
 
     // Update item status
     const targetDoc: any = lostItem || foundItem;
     if (targetDoc) {
-      targetDoc.status = autoApproved ? "VERIFICATION" : "CLAIMED";
+      targetDoc.status = "CLAIMED";
       targetDoc.currentClaimId = claim._id as Types.ObjectId;
       targetDoc.stateHistory.push({
-        state: autoApproved ? "VERIFICATION" : "CLAIMED",
+        state: "CLAIMED",
         actorId: user._id,
-        note: autoApproved
-          ? `Claim auto-approved by secret verification match.`
+        note: answerMatched
+          ? `Claim submitted with matching secret verification answer. Awaiting verification review.`
           : `Claim submitted by ${user.displayName}. Pending review.`,
         timestamp: new Date(),
       });
       await targetDoc.save();
     }
 
-    // Send notification to the counterparty
+    // Send notification to the counterparty (Never leak recovery PINs in notifications)
+    const itemTitle = targetDoc?.title || targetDoc?.shortTitle || "item";
     await Notification.create({
       userId: counterpartyUserId,
       category: "CLAIM_UPDATE",
-      title: autoApproved ? "Claim Verified & Approved!" : "New Claim Received!",
-      message: autoApproved
-        ? (itemType === "LOST"
-            ? `Your lost item has been located! Your 6-digit recovery PIN is ${handoverCode}. Give this PIN to the finder when you receive your item.`
-            : `${user.displayName} verified ownership of "${targetDoc?.title || targetDoc?.shortTitle || "item"}". They will present their 6-digit PIN upon handover.`)
-        : `${user.displayName} has submitted a claim for "${targetDoc?.title || targetDoc?.shortTitle || "item"}". Please review their evidence.`,
+      title: "New Claim Received",
+      message: answerMatched
+        ? `${user.displayName} submitted a claim for "${itemTitle}" with a matching verification answer. Please review.`
+        : `${user.displayName} has submitted a claim for "${itemTitle}". Please review their evidence.`,
       linkUrl: `/items/${id}`,
     });
-
-    // Determine if claimant is the receiving party (FOUND item -> claimant receives item and holds code)
-    const claimantIsReceiver = itemType === "FOUND";
 
     return NextResponse.json(
       {
         success: true,
         data: {
           claimId: claim._id,
-          status: claim.status,
-          // Only disclose handoverCode directly in response if claimant is the verified receiving party
-          ...(autoApproved && claimantIsReceiver ? { handoverCode } : {}),
-          autoApproved,
+          status: "PENDING",
+          answerMatched,
+          autoApproved: false,
         },
       },
       { status: 201 }

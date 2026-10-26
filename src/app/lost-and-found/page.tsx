@@ -106,6 +106,35 @@ function LostAndFoundDirectoryContent() {
       setErrorNotice(null);
 
       try {
+        if (typeFilter === "RECOVERED") {
+          const recParams = new URLSearchParams();
+          if (categoryFilter !== "ALL") recParams.set("category", categoryFilter);
+          const res = await fetch(`/api/items/recovered?${recParams.toString()}`);
+          const json = await res.json();
+          if (json.success) {
+            const list = (json.data || []).map((r: any) => ({
+              _id: r._id,
+              title: r.title,
+              category: r.category,
+              itemType: "RECOVERED",
+              status: "RECOVERED",
+              publicDescription: `Successfully returned to owner in ${r.broadZone}. Certified via ${r.handoverMethod}.`,
+              location: { name: r.broadZone },
+              coarseDate: r.coarseDate,
+              finderAttribution: r.finderAttribution,
+              handoverMethod: r.handoverMethod,
+              createdAt: r.coarseDate,
+            }));
+            setItems(list);
+            setTotalCount(json.pagination?.total ?? list.length);
+            setHasMore(false);
+            setNextCursor(null);
+          } else {
+            setErrorNotice(json.error?.message || "Failed to load recovered items.");
+          }
+          return;
+        }
+
         const params = new URLSearchParams();
         if (typeFilter !== "ALL") params.set("type", typeFilter);
         if (categoryFilter !== "ALL") params.set("category", categoryFilter);
@@ -288,6 +317,7 @@ function LostAndFoundDirectoryContent() {
               { key: "ALL", label: "Unified Directory" },
               { key: "LOST", label: "Lost Items" },
               { key: "FOUND", label: "Found at Safe-Desks" },
+              { key: "RECOVERED", label: "Recovered Feed" },
             ].map((t) => (
               <button
                 key={t.key}
@@ -302,6 +332,8 @@ function LostAndFoundDirectoryContent() {
                       ? "bg-rose-500 text-slate-950 shadow-md shadow-rose-500/30"
                       : t.key === "FOUND"
                       ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/30"
+                      : t.key === "RECOVERED"
+                      ? "bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30"
                       : "bg-slate-800 text-white shadow-sm"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
@@ -504,13 +536,16 @@ function LostAndFoundDirectoryContent() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {items.map((item) => {
               const isLost = item.itemType === "LOST";
+              const isRecovered = item.itemType === "RECOVERED" || item.status === "RECOVERED";
               const loc = item.location || item.lastKnownLocationId || item.foundLocationId;
 
               return (
                 <div
                   key={item._id}
                   className={`rounded-2xl p-5 border transition-all flex flex-col justify-between group bg-slate-900/60 ${
-                    isLost
+                    isRecovered
+                      ? "border-cyan-500/30 hover:border-cyan-500/60 shadow-lg shadow-cyan-950/20"
+                      : isLost
                       ? "border-rose-500/20 hover:border-rose-500/50 shadow-lg shadow-rose-950/20"
                       : "border-emerald-500/20 hover:border-emerald-500/50 shadow-lg shadow-emerald-950/20"
                   }`}
@@ -519,7 +554,9 @@ function LostAndFoundDirectoryContent() {
                     <div className="flex items-center justify-between">
                       <span
                         className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
-                          isLost
+                          isRecovered
+                            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                            : isLost
                             ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
                             : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                         }`}

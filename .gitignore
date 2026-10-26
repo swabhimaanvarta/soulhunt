@@ -8,8 +8,9 @@ node_modules/
 out/
 src/screenshots/
 
-# Database files
+# Database & Storage
 data/
+storage/
 *.log
 
 # Sensitive environment variables

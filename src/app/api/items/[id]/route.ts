@@ -42,7 +42,8 @@ export async function GET(
         .select("+rawPhotoUrl")
         .populate("finderId", "displayName username avatarUrl department")
         .populate("foundLocationId", "name code zoneType coordinates")
-        .populate("currentCustodyLocationId", "name code isSafeDesk operatingHours")
+        .populate("safeDeskLocationId", "name code isSafeDesk operatingHours building")
+        .populate("currentCustodyLocationId", "name code isSafeDesk operatingHours building")
         .lean();
       itemType = "FOUND";
     }
@@ -179,6 +180,8 @@ export async function GET(
         isOwner: Boolean(isOwner),
         isStaff: Boolean(isStaff),
         isAuthenticated: Boolean(user),
+        currentUserId: user?._id?.toString() || null,
+        currentUserRole: user?.role || null,
       },
     });
   } catch (error: any) {

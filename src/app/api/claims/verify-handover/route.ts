@@ -58,15 +58,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Rate limit: 5 attempts per claim
-    const claimRate = await checkRateLimit(`handover_claim_${claimId}`, 5, 900);
-    if (!claimRate.allowed) {
-      return NextResponse.json(
-        { success: false, error: { code: "RATE_LIMITED", message: "Too many attempts on this claim ticket. Please wait 15 minutes." } },
-        { status: 429 }
-      );
-    }
-
     await connectDB();
 
     const claim = await ClaimRequest.findById(claimId).select("+handoverCode +handoverCodeHash");
@@ -77,49 +68,6 @@ export async function POST(req: NextRequest) {
           error: {
             code: "CLAIM_NOT_READY",
             message: "Claim is not in an APPROVED handover state.",
-          },
-        },
-        { status: 400 }
-      );
-    }
-
-    // Check if claim is locked
-    const isLocked = Boolean(
-      claim.handoverLocked || (claim.handoverAttempts && claim.handoverAttempts >= 5)
-    );
-    if (isLocked) {
-      if (claim.lockoutUntil && new Date() >= new Date(claim.lockoutUntil)) {
-        // Lockout window expired: reset lockout flags and allow verification to proceed
-        claim.handoverLocked = false;
-        claim.handoverAttempts = 0;
-        claim.lockoutUntil = null;
-        await ClaimRequest.findByIdAndUpdate(claim._id, {
-          handoverLocked: false,
-          handoverAttempts: 0,
-          lockoutUntil: null,
-        });
-      } else {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: "HANDOVER_LOCKED",
-              message: "Handover verification locked due to excessive failed attempts. Contact Safe-Desk staff or wait for lockout expiry.",
-            },
-          },
-          { status: 423 }
-        );
-      }
-    }
-
-    // Check code expiration (24 hour validity policy)
-    if (claim.handoverCodeExpiresAt && new Date() > claim.handoverCodeExpiresAt) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "CODE_EXPIRED",
-            message: "This handover code has expired. Please request a new verification code from the item owner.",
           },
         },
         { status: 400 }
@@ -212,6 +160,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Caller must be the surrendering custodian or campus staff
+    // Strict Denial-of-Service guard: Unauthorized callers cannot increment attempts or trigger lockouts
     if (callerId !== finderIdStr && !isStaff) {
       return NextResponse.json(
         {
@@ -222,6 +171,58 @@ export async function POST(req: NextRequest) {
           },
         },
         { status: 403 }
+      );
+    }
+
+    // Authorized custodian confirmed: Now check claim lockout state
+    const isLocked = Boolean(
+      claim.handoverLocked || (claim.handoverAttempts && claim.handoverAttempts >= 5)
+    );
+    if (isLocked) {
+      if (claim.lockoutUntil && new Date() >= new Date(claim.lockoutUntil)) {
+        // Lockout window expired: reset lockout flags and allow verification to proceed
+        claim.handoverLocked = false;
+        claim.handoverAttempts = 0;
+        claim.lockoutUntil = null;
+        await ClaimRequest.findByIdAndUpdate(claim._id, {
+          handoverLocked: false,
+          handoverAttempts: 0,
+          lockoutUntil: null,
+        });
+      } else {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: "HANDOVER_LOCKED",
+              message: "Handover verification locked due to excessive failed attempts. Contact Safe-Desk staff or wait for lockout expiry.",
+            },
+          },
+          { status: 423 }
+        );
+      }
+    }
+
+    // Check code expiration (24 hour validity policy)
+    if (claim.handoverCodeExpiresAt && new Date() > claim.handoverCodeExpiresAt) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "CODE_EXPIRED",
+            message: "This handover code has expired. Please request a new verification code from the item owner.",
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // Rate limit: 5 attempts per claim for authorized callers
+    const claimRate = await checkRateLimit(`handover_claim_${claimId}`, 5, 900);
+    if (!claimRate.allowed) {
+      return NextResponse.json(
+        { success: false, error: { code: "RATE_LIMITED", message: "Too many attempts on this claim ticket. Please wait 15 minutes." } },
+        { status: 429 }
       );
     }
 

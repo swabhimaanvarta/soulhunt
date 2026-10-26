@@ -29,14 +29,16 @@ export async function GET(req: NextRequest) {
     const isOwnProfile = currentUser?._id && currentUser._id.toString() === targetUser._id.toString();
     const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "MODERATOR";
 
-    // Privacy check: If user made profile private, return strictly displayName and avatar to non-owners/non-staff
+    // Privacy check: If user made profile private, return strictly masked handle and avatar to non-owners/non-staff
     if (!isOwnProfile && !isAdmin && targetUser.isProfilePublic === false) {
       return NextResponse.json({
         success: true,
         isOwnProfile: false,
         profileHidden: true,
+        message: "This hunter's profile is set to private.",
         profile: {
-          displayName: targetUser.displayName,
+          username: targetUser.username,
+          displayName: targetUser.identityMode === "PUBLIC" ? targetUser.displayName : `@${targetUser.username}`,
           avatar: targetUser.avatarUrl || `/avatars/${targetUser.avatarPreset || "recon"}.png`,
           avatarUrl: targetUser.avatarUrl || `/avatars/${targetUser.avatarPreset || "recon"}.png`,
           avatarPreset: targetUser.avatarPreset || "recon",
@@ -92,10 +94,16 @@ export async function GET(req: NextRequest) {
       .limit(20)
       .lean();
 
+    // Invariant: Non-owner public display name resolves by identityMode (PUBLIC vs PSEUDONYMOUS)
+    const publicDisplayName =
+      targetUser.identityMode === "PUBLIC" || isOwnProfile || isAdmin
+        ? targetUser.displayName
+        : `@${targetUser.username}`;
+
     const profileData = {
       _id: targetUser._id.toString(),
       username: targetUser.username,
-      displayName: targetUser.displayName,
+      displayName: publicDisplayName,
       avatarUrl: targetUser.avatarUrl,
       avatarPreset: targetUser.avatarPreset || "recon",
       bio: targetUser.bio || "",
@@ -105,7 +113,6 @@ export async function GET(req: NextRequest) {
       level: targetUser.level,
       rankTitle: targetUser.rankTitle,
       xp: targetUser.xp,
-      trustTier: targetUser.trustTier,
       equippedTitle: targetUser.equippedTitle || "",
       equippedFrame: targetUser.equippedFrame || "frame-emerald-pulse",
       equippedTheme: targetUser.equippedTheme || "theme-obsidian-grid",
@@ -114,10 +121,13 @@ export async function GET(req: NextRequest) {
       createdAt: targetUser.createdAt,
       isProfilePublic: targetUser.isProfilePublic !== false,
       isLeaderboardPublic: targetUser.isLeaderboardPublic !== false,
+      identityMode: targetUser.identityMode || "PSEUDONYMOUS",
+      publicAttributionPreference: targetUser.publicAttributionPreference || "HANDLE",
       featuredAchievementIds: targetUser.featuredAchievementIds || [],
-      // Private fields and raw trustScore only exposed to owner or admin
+      // Private fields and internal trust signals strictly exposed to owner or admin ONLY
       ...(isOwnProfile || isAdmin
         ? {
+            trustTier: targetUser.trustTier,
             trustScore: targetUser.trustScore,
             email: targetUser.email,
             phoneNumber: targetUser.phoneNumber || "",
@@ -284,6 +294,14 @@ export async function PUT(req: NextRequest) {
       user.isLeaderboardPublic = Boolean(body.isLeaderboardPublic);
     }
 
+    if (body.identityMode !== undefined && ["PSEUDONYMOUS", "ANONYMOUS", "PUBLIC"].includes(body.identityMode)) {
+      user.identityMode = body.identityMode;
+    }
+
+    if (body.publicAttributionPreference !== undefined && ["HANDLE", "ANONYMOUS"].includes(body.publicAttributionPreference)) {
+      user.publicAttributionPreference = body.publicAttributionPreference;
+    }
+
     if (Array.isArray(body.featuredAchievementIds)) {
       user.featuredAchievementIds = body.featuredAchievementIds
         .filter((id: any) => typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id))
@@ -342,6 +360,8 @@ export async function PUT(req: NextRequest) {
         trustTier: user.trustTier,
         isProfilePublic: user.isProfilePublic !== false,
         isLeaderboardPublic: user.isLeaderboardPublic !== false,
+        identityMode: user.identityMode || "PSEUDONYMOUS",
+        publicAttributionPreference: user.publicAttributionPreference || "HANDLE",
         featuredAchievementIds: user.featuredAchievementIds || [],
       },
     });

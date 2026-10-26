@@ -21,6 +21,9 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import ItemActionBanner from "@/components/lost-and-found/ItemActionBanner";
+import HandoverOtpCard from "@/components/lost-and-found/HandoverOtpCard";
+import HandoverCoordinationChat from "@/components/lost-and-found/HandoverCoordinationChat";
 
 export default function ItemDetailPage() {
   const params = useParams();
@@ -293,6 +296,14 @@ export default function ItemDetailPage() {
           <ArrowLeft className="w-3.5 h-3.5" /> Back to Lost & Found Directory
         </button>
       </div>
+
+      {/* Role-Aware Contextual Action Banner */}
+      <ItemActionBanner
+        item={item}
+        currentUser={{ _id: item.currentUserId, role: item.currentUserRole }}
+        activeClaim={activeClaimDetail || item.claims?.find((c: any) => c.status === "APPROVED") || item.claims?.[0]}
+        pendingClaimsCount={item.claims?.filter((c: any) => c.status === "PENDING").length || 0}
+      />
 
       {/* Main Item Card */}
       <div className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-6">
@@ -650,54 +661,27 @@ export default function ItemDetailPage() {
                   )}
 
                   {claim.status === "APPROVED" && (
-                    <div className="pt-3 border-t border-white/5 space-y-4">
-                      {isOwner && isLost ? (
-                        /* Owner of lost item is the RECEIVER of the item: display their PIN to show the finder */
-                        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-3">
-                          <div className="text-xs font-mono text-emerald-400 flex items-center gap-1.5 font-bold">
-                            <KeyRound className="w-4 h-4 text-emerald-400" />
-                            Your 6-Digit Handover Verification PIN
-                          </div>
-                          <p className="text-xs text-slate-300 leading-relaxed">
-                            Your claim is approved! When you meet the finder or Safe-Desk staff to collect your belonging, present this 6-digit recovery PIN:
-                          </p>
-                          <div className="inline-block px-5 py-2.5 rounded-xl bg-slate-950 border border-emerald-400/50 text-2xl font-mono font-black text-emerald-400 tracking-widest">
-                            {activeClaimDetail?.handoverCode || "******"}
-                          </div>
-                          <div className="text-[11px] font-mono text-slate-400">
-                            The finder will enter this PIN on their device to certify the physical handover.
-                          </div>
-                        </div>
-                      ) : (
-                        /* Custodian (Finder or Staff): enter the code given by the receiver */
-                        <div className="space-y-3">
-                          <div className="text-xs font-mono text-amber-400 flex items-center gap-1.5 font-bold">
-                            <Lock className="w-3.5 h-3.5" />
-                            Handover Ready: Enter Receiver&apos;s 6-Digit PIN
-                          </div>
-                          <p className="text-xs text-slate-400">
-                            Ask the claimant or owner for their 6-digit recovery PIN to certify physical custody handover.
-                          </p>
+                    <div className="pt-3 border-t border-white/5 space-y-5">
+                      <HandoverOtpCard
+                        mode={isOwner && isLost ? "RECIPIENT" : "CUSTODIAN"}
+                        claimId={claim._id}
+                        handoverCode={isOwner && isLost ? (activeClaimDetail?.handoverCode || "******") : undefined}
+                        handoverAttempts={claim.handoverAttempts}
+                        handoverLocked={claim.handoverLocked}
+                        lockoutUntil={claim.lockoutUntil}
+                        onVerifySuccess={() => {
+                          fetchItem();
+                          fetchActiveClaim(claim._id);
+                        }}
+                      />
 
-                          <div className="flex items-center gap-3 max-w-sm">
-                            <input
-                              type="text"
-                              maxLength={6}
-                              placeholder="6-DIGIT CODE"
-                              value={verifyCode}
-                              onChange={(e) => setVerifyCode(e.target.value.trim())}
-                              className="w-40 px-3 py-2 rounded-xl bg-slate-900 border border-white/20 text-center font-mono text-sm tracking-widest text-emerald-400 focus:outline-none focus:border-emerald-400"
-                            />
-                            <button
-                              onClick={() => handleVerifyHandover(claim._id)}
-                              disabled={verifyLoading}
-                              className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all disabled:opacity-50 cursor-pointer"
-                            >
-                              {verifyLoading ? "Verifying..." : "Verify Code"}
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      <HandoverCoordinationChat
+                        claimId={claim._id}
+                        isFinder={Boolean(!isLost || isStaff)}
+                        isClaimant={Boolean(isLost)}
+                        custodyStatus={item.custodyStatus}
+                        safeDeskLocationName={item.safeDeskLocationId?.name || "Campus Safe-Desk"}
+                      />
                     </div>
                   )}
 
@@ -842,42 +826,24 @@ export default function ItemDetailPage() {
                           </p>
                         </div>
 
-                        {/* Persistent 6-Digit Handover PIN Display */}
-                        {activePin ? (
-                          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-950/90 p-5 rounded-2xl border border-emerald-500/40">
-                            <div className="text-center sm:text-left space-y-1">
-                              <div className="text-[11px] font-mono uppercase tracking-wider text-emerald-400 font-bold flex items-center gap-1.5 justify-center sm:justify-start">
-                                <KeyRound className="w-3.5 h-3.5 text-emerald-400" />
-                                <span>Your 6-Digit Handover Verification PIN</span>
-                              </div>
-                              <div className="text-3xl sm:text-4xl font-mono font-black text-emerald-400 tracking-widest mt-1">
-                                {activePin}
-                              </div>
-                              <div className="text-[11px] text-slate-400 font-mono">
-                                Present this persistent PIN upon collecting your belonging.
-                              </div>
-                            </div>
-                            {(activeClaimDetail?.handoverCodeExpiresAt || claimSuccess?.expiresAt) && (
-                              <div className="text-center sm:text-right font-mono text-xs text-slate-400 bg-slate-900/60 p-3 rounded-xl border border-white/5">
-                                <div className="text-emerald-400 font-bold">24-Hour Active Validity</div>
-                                <div className="text-slate-500 text-[10px] mt-0.5">
-                                  Expires {new Date(activeClaimDetail?.handoverCodeExpiresAt || claimSuccess?.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="p-4 rounded-xl bg-slate-900/80 border border-white/10 text-xs text-slate-400 font-mono flex items-center justify-between">
-                            <span>Retrieving persistent recovery PIN...</span>
-                            <button
-                              type="button"
-                              onClick={() => fetchActiveClaim(myClaim._id)}
-                              className="text-cyan-400 underline hover:text-cyan-300 text-[11px]"
-                            >
-                              Refresh PIN
-                            </button>
-                          </div>
-                        )}
+                        {/* Asymmetric Visual Recovery Pass */}
+                        <HandoverOtpCard
+                          mode="RECIPIENT"
+                          claimId={myClaim._id}
+                          handoverCode={activePin || activeClaimDetail?.handoverCode}
+                          handoverCodeExpiresAt={activeClaimDetail?.handoverCodeExpiresAt}
+                          handoverLocked={activeClaimDetail?.handoverLocked}
+                          lockoutUntil={activeClaimDetail?.lockoutUntil}
+                        />
+
+                        {/* Handover Coordination Chat */}
+                        <HandoverCoordinationChat
+                          claimId={myClaim._id}
+                          isFinder={false}
+                          isClaimant={true}
+                          custodyStatus={item.custodyStatus}
+                          safeDeskLocationName={item.safeDeskLocationId?.name || "Campus Safe-Desk"}
+                        />
 
                         {/* Safe-Desk Instructions */}
                         <div className="p-4 rounded-xl bg-slate-900/80 border border-white/5 space-y-2.5 text-xs">

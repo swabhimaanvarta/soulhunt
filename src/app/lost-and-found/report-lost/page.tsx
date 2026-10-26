@@ -17,6 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import LiveMatchDrawer from "@/components/lost-and-found/LiveMatchDrawer";
 
 export default function ReportLostItemPage() {
   const router = useRouter();
@@ -156,6 +157,12 @@ export default function ReportLostItemPage() {
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400"
+              />
+              <LiveMatchDrawer
+                type="LOST"
+                title={formData.title}
+                category={formData.category}
+                locationId={formData.lastKnownLocationId}
               />
             </div>
 

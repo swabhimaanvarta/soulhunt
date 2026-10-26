@@ -9,6 +9,7 @@ import {
   Target, CheckCircle2, AlertTriangle, BookOpen,
   Sparkles, Radio, Calendar, Flame, ArrowUpRight, Award, MapPin
 } from "lucide-react";
+import MyRecoveriesSection from "@/components/lost-and-found/MyRecoveriesSection";
 
 interface UserData {
   _id: string;
@@ -421,6 +422,9 @@ export default function DashboardPage() {
             </div>
           </motion.div>
         )}
+
+        {/* Private Verified Recovery Receipts Ledger */}
+        <MyRecoveriesSection />
 
         {/* Footer CTAs */}
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
