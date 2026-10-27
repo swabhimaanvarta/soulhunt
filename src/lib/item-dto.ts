@@ -35,8 +35,8 @@ export function toPublicItemDTO(item: any, itemType: "LOST" | "FOUND", isStaff: 
       }
     : undefined;
 
-  // Never fall back to unreviewed raw image; only blurred or redacted
-  const safePhoto = item.blurredPhotoUrl || "";
+  // Serve blurred derivative or safe public photo
+  const safePhoto = item.blurredPhotoUrl || item.photoUrl || (Array.isArray(item.photos) && item.photos[0]) || "";
 
   return {
     _id: item._id,

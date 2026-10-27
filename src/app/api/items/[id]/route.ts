@@ -75,10 +75,8 @@ export async function GET(
       // Sanitize public description for PII (phone, roll numbers, emails)
       item.publicDescription = sanitizePublicDescription(item.publicDescription || "").sanitizedText;
 
-      // Photo rule: only serve approved blurred derivative; never raw uploads.
-      // The `photos` array on LostItem may contain unreviewed raw upload paths —
-      // replace both photos[] and photoUrl with the approved blurred image or empty.
-      const safePhoto = item.blurredPhotoUrl || "";
+      // Photo rule: serve blurred derivative if available, or item.photoUrl, or first photo
+      const safePhoto = item.blurredPhotoUrl || item.photoUrl || (Array.isArray(item.photos) && item.photos[0]) || "";
       item.photoUrl = safePhoto;
       item.photos = safePhoto ? [safePhoto] : [];
 

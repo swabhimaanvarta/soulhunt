@@ -1,0 +1,26 @@
+<svg width="600" height="450" viewBox="0 0 600 450" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="600" y2="450" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#090d16"/>
+      <stop offset="0.5" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#021c1e"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="200" y1="120" x2="400" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06b6d4" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#10b981" stop-opacity="0.05"/>
+    </linearGradient>
+  </defs>
+  <rect width="600" height="450" fill="url(#bg)"/>
+  <rect x="24" y="24" width="552" height="402" rx="28" fill="#131d31" fill-opacity="0.7" stroke="#334155" stroke-width="2"/>
+  <circle cx="300" cy="190" r="70" fill="url(#glow)"/>
+  <circle cx="300" cy="190" r="70" stroke="#06b6d4" stroke-width="2" stroke-opacity="0.4" stroke-dasharray="6 6"/>
+  
+  <!-- Stylized Box / Safe Item Icon -->
+  <path d="M260 170L300 150L340 170L300 190L260 170Z" stroke="#22d3ee" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M260 170V210L300 230V190" stroke="#06b6d4" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M340 170V210L300 230" stroke="#10b981" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <text x="300" y="290" text-anchor="middle" fill="#f8fafc" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="700" letter-spacing="0.5">AIEM Campus Belonging</text>
+  <text x="300" y="318" text-anchor="middle" fill="#94a3b8" font-family="ui-monospace, monospace" font-size="13" letter-spacing="1">CAMPUS VERIFIED LISTING</text>
+  <text x="300" y="340" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12">Inspect description &amp; safe-desk custody details</text>
+</svg>

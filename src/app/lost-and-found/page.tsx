@@ -19,7 +19,13 @@ import {
   Loader2,
   Tag,
   Building,
+  PackageSearch,
+  PackageCheck,
+  Layers,
+  LayoutGrid,
+  List,
 } from "lucide-react";
+import DirectoryItemCard from "@/components/lost-and-found/DirectoryItemCard";
 
 const CATEGORIES = [
   { key: "ALL", label: "All Items" },
@@ -79,6 +85,8 @@ function LostAndFoundDirectoryContent() {
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const [mobileViewTab, setMobileViewTab] = useState<"ALL" | "LOST" | "FOUND">("ALL");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // Sync state back to URL query parameters
   const updateQueryParams = useCallback(
@@ -267,6 +275,28 @@ function LostAndFoundDirectoryContent() {
         fetchItems(null, false);
       },
     });
+  }
+
+  const isResolvedOrClaimed = (item: any) => {
+    return (
+      item.itemType === "FOUND" ||
+      item.itemType === "RECOVERED" ||
+      ["CLAIMED", "COMPLETED", "RECOVERED", "HANDOVER_COMPLETE"].includes(item.status)
+    );
+  };
+
+  let activeLostItems: any[] = [];
+  let foundAndClaimedItems: any[] = [];
+
+  if (typeFilter === "LOST") {
+    activeLostItems = items.filter((i) => !["CLAIMED", "COMPLETED", "RECOVERED", "HANDOVER_COMPLETE"].includes(i.status));
+    foundAndClaimedItems = items.filter((i) => ["CLAIMED", "COMPLETED", "RECOVERED", "HANDOVER_COMPLETE"].includes(i.status));
+  } else if (typeFilter === "FOUND") {
+    activeLostItems = items.filter((i) => !["CLAIMED", "COMPLETED", "RECOVERED", "HANDOVER_COMPLETE"].includes(i.status));
+    foundAndClaimedItems = items.filter((i) => ["CLAIMED", "COMPLETED", "RECOVERED", "HANDOVER_COMPLETE"].includes(i.status));
+  } else {
+    activeLostItems = items.filter((i) => i.itemType === "LOST" && !isResolvedOrClaimed(i));
+    foundAndClaimedItems = items.filter((i) => isResolvedOrClaimed(i));
   }
 
   return (
@@ -532,96 +562,200 @@ function LostAndFoundDirectoryContent() {
           </div>
         </div>
       ) : (
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {items.map((item) => {
-              const isLost = item.itemType === "LOST";
-              const isRecovered = item.itemType === "RECOVERED" || item.status === "RECOVERED";
-              const loc = item.location || item.lastKnownLocationId || item.foundLocationId;
-
-              return (
-                <div
-                  key={item._id}
-                  className={`rounded-2xl p-5 border transition-all flex flex-col justify-between group bg-slate-900/60 ${
-                    isRecovered
-                      ? "border-cyan-500/30 hover:border-cyan-500/60 shadow-lg shadow-cyan-950/20"
-                      : isLost
-                      ? "border-rose-500/20 hover:border-rose-500/50 shadow-lg shadow-rose-950/20"
-                      : "border-emerald-500/20 hover:border-emerald-500/50 shadow-lg shadow-emerald-950/20"
-                  }`}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span
-                        className={`px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider ${
-                          isRecovered
-                            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                            : isLost
-                            ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                            : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                        }`}
-                      >
-                        {item.itemType}
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-400">
-                        {item.category?.replace(/_/g, " ")}
-                      </span>
-                    </div>
-
-                    <h3 className="font-bold text-base text-white group-hover:text-cyan-300 transition-colors">
-                      {item.title}
-                    </h3>
-
-                    <p className="text-xs text-slate-300 line-clamp-3 leading-relaxed">
-                      {item.publicDescription}
-                    </p>
-
-                    {/* Safe Broad Zone & Custody Details */}
-                    <div className="pt-2 border-t border-white/5 space-y-1.5 text-xs font-mono text-slate-300">
-                      <div className="flex items-center gap-1.5 text-slate-300">
-                        <MapPin
-                          className={`w-3.5 h-3.5 shrink-0 ${
-                            isLost ? "text-rose-400" : "text-emerald-400"
-                          }`}
-                        />
-                        <span className="truncate">
-                          {loc?.name || "AIEM Campus Zone"}
-                        </span>
-                      </div>
-
-                      {item.custodyStatus && (
-                        <div className="flex items-center gap-1.5 text-slate-400 text-[11px]">
-                          <Shield className="w-3 h-3 text-cyan-400 shrink-0" />
-                          <span className="truncate">
-                            {item.custodyStatus.replace(/_/g, " ")}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between">
-                    <span className="text-[10px] font-mono text-slate-500">
-                      {item.dateReported
-                        ? new Date(item.dateReported).toLocaleDateString([], {
-                            month: "short",
-                            day: "numeric",
-                          })
-                        : "Recent"}
-                    </span>
-
-                    <Link
-                      href={`/items/${item._id}`}
-                      className="inline-flex items-center gap-1 text-xs font-mono text-cyan-400 font-bold hover:text-cyan-300 transition-colors"
+        <div className="space-y-6">
+          {typeFilter === "RECOVERED" ? (
+            /* Full Grid for Recovered Items Feed */
+            <div className="space-y-4">
+              <div className="flex items-center gap-2.5 pb-2 border-b border-cyan-500/30">
+                <CheckCircle2 className="w-5 h-5 text-cyan-400" />
+                <h2 className="text-base font-bold text-white tracking-wide">
+                  Verified Campus Recoveries
+                </h2>
+                <span className="ml-auto px-2.5 py-0.5 rounded-full text-xs font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
+                  {items.length} Completed
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {items.map((item) => (
+                  <DirectoryItemCard key={item._id} item={item} isGreyedOut={true} />
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Two-Column Layout: Actively Lost (Column 1) vs Already Found & Claimed (Column 2 - Greyed Out) */
+            <div className="space-y-6">
+              {/* View Control Surface: Category Selector & Grid/List Density Toggle */}
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900/60 p-2 sm:p-2.5 rounded-2xl border border-white/10">
+                {/* Mobile View Toggle Pills */}
+                <div className="flex items-center gap-1.5 lg:hidden">
+                  <span className="text-[10px] font-mono text-slate-400">View:</span>
+                  <div className="flex rounded-lg bg-slate-950 p-0.5 border border-white/10 text-[11px] font-mono">
+                    <button
+                      type="button"
+                      onClick={() => setMobileViewTab("ALL")}
+                      className={`px-2 py-1 rounded-md font-bold transition-all ${
+                        mobileViewTab === "ALL" ? "bg-slate-800 text-white shadow" : "text-slate-400 hover:text-white"
+                      }`}
                     >
-                      <span>View Record</span>
-                      <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
-                    </Link>
+                      Both
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMobileViewTab("LOST")}
+                      className={`px-2 py-1 rounded-md font-bold transition-all ${
+                        mobileViewTab === "LOST" ? "bg-rose-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Lost ({activeLostItems.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMobileViewTab("FOUND")}
+                      className={`px-2 py-1 rounded-md font-bold transition-all ${
+                        mobileViewTab === "FOUND" ? "bg-slate-800 text-slate-300 border border-slate-700 shadow" : "text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      Found/Claimed ({foundAndClaimedItems.length})
+                    </button>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* Density View Toggle (Grid vs List) */}
+                <div className="flex items-center gap-1.5 ml-auto text-xs font-mono">
+                  <span className="text-[10px] text-slate-400 hidden xs:inline">Density:</span>
+                  <div className="flex rounded-lg bg-slate-950 p-0.5 border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                        viewMode === "grid"
+                          ? "bg-slate-800 text-cyan-400 shadow border border-cyan-500/30"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                      title="Compact 2-Column Grid (Multiple cards on screen)"
+                    >
+                      <LayoutGrid className="w-3 h-3" />
+                      <span className="hidden sm:inline">2-Col Grid</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("list")}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold transition-all ${
+                        viewMode === "list"
+                          ? "bg-slate-800 text-cyan-400 shadow border border-cyan-500/30"
+                          : "text-slate-400 hover:text-white"
+                      }`}
+                      title="Dense List Rows (Maximum cards on screen)"
+                    >
+                      <List className="w-3 h-3" />
+                      <span className="hidden sm:inline">Dense List</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two Column Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-8 items-start">
+                {/* COLUMN 1: Actively Lost Belongings */}
+                <div className={`space-y-3.5 ${mobileViewTab === "FOUND" ? "hidden lg:block" : ""}`}>
+                  <div className="flex items-center justify-between pb-2.5 border-b-2 border-rose-500/40">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-rose-500/20 text-rose-400 border border-rose-500/40 shrink-0">
+                        <PackageSearch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </div>
+                      <div>
+                        <h2 className="text-xs sm:text-base font-bold text-white flex items-center gap-1.5 sm:gap-2">
+                          {typeFilter === "FOUND" ? "Unclaimed at Safe-Desk" : "Actively Lost Belongings"}
+                          <span className="rounded-full bg-rose-500/20 px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-mono font-bold text-rose-300 border border-rose-500/40">
+                            {activeLostItems.length} Missing
+                          </span>
+                        </h2>
+                        <p className="text-[10px] sm:text-[11px] text-slate-400">
+                          {typeFilter === "FOUND"
+                            ? "Turned-in items awaiting rightful owner verification"
+                            : "Currently missing items students are searching for across campus"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {activeLostItems.length === 0 ? (
+                    <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-6 text-center space-y-1.5">
+                      <PackageSearch className="w-6 h-6 text-slate-600 mx-auto" />
+                      <p className="text-xs font-mono text-slate-400">
+                        No active missing reports in this category.
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      className={
+                        viewMode === "list"
+                          ? "grid grid-cols-1 gap-2"
+                          : "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2 sm:gap-3"
+                      }
+                    >
+                      {activeLostItems.map((item) => (
+                        <DirectoryItemCard
+                          key={item._id}
+                          item={item}
+                          isGreyedOut={false}
+                          layout={viewMode}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* COLUMN 2: Already Found & Claimed Items (Greyed Out) */}
+                <div className={`space-y-3.5 ${mobileViewTab === "LOST" ? "hidden lg:block" : ""}`}>
+                  <div className="flex items-center justify-between pb-2.5 border-b-2 border-slate-700">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-slate-800 text-slate-400 border border-slate-700 shrink-0">
+                        <PackageCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </div>
+                      <div>
+                        <h2 className="text-xs sm:text-base font-bold text-slate-300 flex items-center gap-1.5 sm:gap-2">
+                          {typeFilter === "FOUND" ? "Already Claimed & Reunited" : "Already Found & Claimed Items"}
+                          <span className="rounded-full bg-slate-800 px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-mono font-bold text-slate-400 border border-slate-700">
+                            {foundAndClaimedItems.length} Resolved
+                          </span>
+                        </h2>
+                        <p className="text-[10px] sm:text-[11px] text-slate-400">
+                          Items already found, stored at Safe-Desks, or successfully reunited
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {foundAndClaimedItems.length === 0 ? (
+                    <div className="rounded-2xl border border-white/5 bg-slate-950/40 p-6 text-center space-y-1.5">
+                      <PackageCheck className="w-6 h-6 text-slate-600 mx-auto" />
+                      <p className="text-xs font-mono text-slate-400">
+                        No claimed or found turn-ins in this category.
+                      </p>
+                    </div>
+                  ) : (
+                    <div
+                      className={
+                        viewMode === "list"
+                          ? "grid grid-cols-1 gap-2"
+                          : "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-2 sm:gap-3"
+                      }
+                    >
+                      {foundAndClaimedItems.map((item) => (
+                        <DirectoryItemCard
+                          key={item._id}
+                          item={item}
+                          isGreyedOut={true}
+                          layout={viewMode}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Cursor-based Load More Button */}
           {hasMore && (

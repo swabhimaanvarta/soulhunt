@@ -22,65 +22,77 @@ export async function GET(
       );
     }
 
-    // 1. Mandatory authentication
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: "Authentication required to view evidence." },
-        { status: 401 }
-      );
-    }
-
     await connectDB();
-    const userIdStr = user._id.toString();
-    const isStaff = user.role === "ADMIN" || user.role === "MODERATOR" || user.role === "SAFE_DESK_STAFF";
 
-    // 2. Authorization check
-    let isAuthorized = isStaff;
+    // 1. Check if this file is published as a public listing photo on a Lost or Found item
+    const [publicLost, publicFound] = await Promise.all([
+      LostItem.exists({ $or: [{ photoUrl: { $regex: filename } }, { photos: { $regex: filename } }] }),
+      FoundItem.exists({ $or: [{ photoUrl: { $regex: filename } }, { blurredPhotoUrl: { $regex: filename } }] }),
+    ]);
 
+    let isAuthorized = Boolean(publicLost || publicFound);
+
+    // 2. If not a public listing photo, enforce strict authentication and ownership checks (e.g. private claim proofs)
     if (!isAuthorized) {
-      // Check if user is the direct uploader
-      const uploadRecord = await EvidenceRecord.findOne({ filename });
-      if (uploadRecord && uploadRecord.uploadedBy.toString() === userIdStr) {
+      const user = await getCurrentUser();
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: "Authentication required to view evidence." },
+          { status: 401 }
+        );
+      }
+
+      const userIdStr = user._id.toString();
+      const isStaff = user.role === "ADMIN" || user.role === "MODERATOR" || user.role === "SAFE_DESK_STAFF";
+
+      if (isStaff) {
         isAuthorized = true;
       }
-    }
 
-    if (!isAuthorized) {
-      // Check if user is a participant in a Claim containing this photo
-      const claim = await ClaimRequest.findOne({
-        proofPhotoUrl: { $regex: filename },
-        $or: [{ claimantId: user._id }, { counterpartyUserId: user._id }],
-      });
-      if (claim) isAuthorized = true;
-    }
+      if (!isAuthorized) {
+        // Check if user is the direct uploader
+        const uploadRecord = await EvidenceRecord.findOne({ filename });
+        if (uploadRecord && uploadRecord.uploadedBy.toString() === userIdStr) {
+          isAuthorized = true;
+        }
+      }
 
-    if (!isAuthorized) {
-      // Check if user reported the lost item or found item
-      const [lost, found] = await Promise.all([
-        LostItem.findOne({ photos: { $regex: filename }, reporterId: user._id }),
-        FoundItem.findOne({
-          $or: [{ rawPhotoUrl: { $regex: filename } }, { photoUrl: { $regex: filename } }],
-          finderId: user._id,
-        }),
-      ]);
-      if (lost || found) isAuthorized = true;
-    }
+      if (!isAuthorized) {
+        // Check if user is a participant in a Claim containing this photo
+        const claim = await ClaimRequest.findOne({
+          proofPhotoUrl: { $regex: filename },
+          $or: [{ claimantId: user._id }, { counterpartyUserId: user._id }],
+        });
+        if (claim) isAuthorized = true;
+      }
 
-    if (!isAuthorized) {
-      // Check if user is participant in linked investigation
-      const inv = await Investigation.findOne({
-        "evidenceNodes.mediaUrl": { $regex: filename },
-        participatingUserIds: user._id,
-      });
-      if (inv) isAuthorized = true;
-    }
+      if (!isAuthorized) {
+        // Check if user reported the lost item or found item
+        const [lost, found] = await Promise.all([
+          LostItem.findOne({ photos: { $regex: filename }, reporterId: user._id }),
+          FoundItem.findOne({
+            $or: [{ rawPhotoUrl: { $regex: filename } }, { photoUrl: { $regex: filename } }],
+            finderId: user._id,
+          }),
+        ]);
+        if (lost || found) isAuthorized = true;
+      }
 
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { success: false, error: "Access denied. You are not authorized to view this evidence photo." },
-        { status: 403 }
-      );
+      if (!isAuthorized) {
+        // Check if user is participant in linked investigation
+        const inv = await Investigation.findOne({
+          "evidenceNodes.mediaUrl": { $regex: filename },
+          participatingUserIds: user._id,
+        });
+        if (inv) isAuthorized = true;
+      }
+
+      if (!isAuthorized) {
+        return NextResponse.json(
+          { success: false, error: "Access denied. You are not authorized to view this evidence photo." },
+          { status: 403 }
+        );
+      }
     }
 
     const storageDir = path.join(process.cwd(), "storage", "evidence");
