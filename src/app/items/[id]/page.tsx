@@ -1337,7 +1337,13 @@ export default function ItemDetailPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowClaimModal(true)}
+                  onClick={() => {
+                    if (!item.isAuthenticated) {
+                      router.push(`/login?redirect=/items/${id}`);
+                      return;
+                    }
+                    setShowClaimModal(true);
+                  }}
                   className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 font-mono transition-all shrink-0 cursor-pointer"
                 >
                   {isLost ? "I Found This Item" : "Claim This Item"}

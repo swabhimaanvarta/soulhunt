@@ -20,7 +20,11 @@ import {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectUrl = searchParams?.get("redirect") || "/";
+  const rawRedirect = searchParams?.get("redirect") || "/";
+  const redirectUrl =
+    rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.startsWith("/\\")
+      ? rawRedirect
+      : "/";
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -128,7 +132,10 @@ function LoginForm() {
                 aria-describedby={error ? "login-error" : undefined}
                 placeholder="name@aiemgoa.ac.in or username"
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e) => {
+                  setIdentifier(e.target.value);
+                  if (error) setError(null);
+                }}
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400"
               />
             </div>
@@ -149,7 +156,10 @@ function LoginForm() {
                 aria-describedby={error ? "login-error" : undefined}
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError(null);
+                }}
                 className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400"
               />
               <button

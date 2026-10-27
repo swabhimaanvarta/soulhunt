@@ -24,19 +24,23 @@ export async function GET(
 
     await connectDB();
 
+    const safeEscapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
     // 1. Check if this file is published as a public listing photo on a Lost or Found item
     const [publicLost, publicFound] = await Promise.all([
       LostItem.exists({
         $or: [
-          { photoUrl: { $regex: filename } },
-          { blurredPhotoUrl: { $regex: filename } },
-          { photos: { $regex: filename } },
+          { photoUrl: { $regex: safeEscapedFilename } },
+          { blurredPhotoUrl: { $regex: safeEscapedFilename } },
+          { rawPhotoUrl: { $regex: safeEscapedFilename } },
+          { photos: { $regex: safeEscapedFilename } },
         ],
       }),
       FoundItem.exists({
         $or: [
-          { photoUrl: { $regex: filename } },
-          { blurredPhotoUrl: { $regex: filename } },
+          { photoUrl: { $regex: safeEscapedFilename } },
+          { blurredPhotoUrl: { $regex: safeEscapedFilename } },
+          { rawPhotoUrl: { $regex: safeEscapedFilename } },
         ],
       }),
     ]);

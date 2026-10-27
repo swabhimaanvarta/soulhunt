@@ -105,7 +105,7 @@ async function runAuthVerification() {
   console.log(`   ✅ User created in PENDING_VERIFICATION (OTP: ${code}, Delivery: ${delivery})`);
 
   // Verify OTP matching
-  const isValidOtp = await bcrypt.compare(code, newStudent.emailVerificationCodeHash);
+  const isValidOtp = await bcrypt.compare(code, newStudent.emailVerificationCodeHash!);
   if (!isValidOtp) throw new Error("Verification code comparison failed!");
 
   // Activate user
@@ -130,3 +130,4 @@ runAuthVerification()
     console.error("❌ Test failed:", err);
     process.exit(1);
   });
+

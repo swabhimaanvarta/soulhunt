@@ -70,15 +70,45 @@ function RegisterForm() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
     setSuccessMsg(null);
+
+    const cleanEmail = formData.email.trim().toLowerCase();
+    const cleanUsername = formData.username.trim().toLowerCase();
+    const cleanDisplayName = formData.displayName.trim();
+
+    if (!cleanEmail.endsWith("@aiemgoa.ac.in") && !cleanEmail.endsWith("@aitdgoa.edu.in")) {
+      setError("Registration requires an official AIEM college email (@aiemgoa.ac.in or @aitdgoa.edu.in).");
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_]{3,24}$/.test(cleanUsername)) {
+      setError("Hunter codename must be 3-24 characters and contain only letters, numbers, and underscores.");
+      return;
+    }
+
+    if (cleanDisplayName.length < 2) {
+      setError("Please enter your real full name for verification.");
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          email: cleanEmail,
+          username: cleanUsername,
+          displayName: cleanDisplayName,
+        }),
       });
 
       const json = await res.json();
@@ -87,7 +117,7 @@ function RegisterForm() {
       }
 
       if (json.pendingVerification) {
-        setTargetEmail(json.email || formData.email.toLowerCase().trim());
+        setTargetEmail(json.email || cleanEmail);
         if (json.devClearanceCode) {
           setDevOtpHint(json.devClearanceCode);
         }
@@ -96,8 +126,7 @@ function RegisterForm() {
         setCanResend(false);
         setSuccessMsg("Clearance code dispatched! Check your institutional college mailbox.");
       } else {
-        router.push("/dashboard");
-        router.refresh();
+        window.location.href = "/dashboard";
       }
     } catch (err: any) {
       setError(err.message || "Registration failed.");
@@ -130,9 +159,8 @@ function RegisterForm() {
 
       setSuccessMsg("Clearance verified! Redirecting to Investigator HQ...");
       setTimeout(() => {
-        router.push("/dashboard");
-        router.refresh();
-      }, 1000);
+        window.location.href = "/dashboard";
+      }, 700);
     } catch (err: any) {
       setError(err.message || "Invalid clearance code.");
     } finally {
@@ -288,8 +316,14 @@ function RegisterForm() {
 
               <button
                 type="button"
-                onClick={() => setIsVerifying(false)}
-                className="text-slate-400 hover:text-slate-200 underline text-[11px]"
+                onClick={() => {
+                  setIsVerifying(false);
+                  setOtpCode("");
+                  setDevOtpHint(null);
+                  setError(null);
+                  setSuccessMsg(null);
+                }}
+                className="text-slate-400 hover:text-slate-200 underline text-[11px] cursor-pointer"
               >
                 Change Email
               </button>
@@ -320,7 +354,10 @@ function RegisterForm() {
                   aria-describedby={error ? "reg-error" : undefined}
                   placeholder="student.name@aiemgoa.ac.in"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, email: e.target.value });
+                    if (error) setError(null);
+                  }}
                   className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-400"
                 />
               </div>
@@ -335,12 +372,17 @@ function RegisterForm() {
                   type="text"
                   required
                   autoComplete="username"
+                  pattern="^[a-zA-Z0-9_]{3,24}$"
+                  title="3-24 characters, letters, numbers, and underscore only"
                   aria-required="true"
                   aria-invalid={!!error}
                   aria-describedby={error ? "reg-error" : undefined}
                   placeholder="e.g. shadow_scout"
                   value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, username: e.target.value });
+                    if (error) setError(null);
+                  }}
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-400"
                 />
               </div>
@@ -358,7 +400,10 @@ function RegisterForm() {
                   aria-describedby={error ? "reg-error" : undefined}
                   placeholder="e.g. Aryan Das"
                   value={formData.displayName}
-                  onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, displayName: e.target.value });
+                    if (error) setError(null);
+                  }}
                   className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-400"
                 />
               </div>

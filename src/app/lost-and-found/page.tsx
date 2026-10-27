@@ -575,9 +575,15 @@ function LostAndFoundDirectoryContent() {
                   {items.length} Completed
                 </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div
+                className={
+                  viewMode === "list"
+                    ? "grid grid-cols-1 gap-2"
+                    : "grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4"
+                }
+              >
                 {items.map((item) => (
-                  <DirectoryItemCard key={item._id} item={item} isGreyedOut={true} />
+                  <DirectoryItemCard key={item._id} item={item} isGreyedOut={true} layout={viewMode} />
                 ))}
               </div>
             </div>

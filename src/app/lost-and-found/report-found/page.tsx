@@ -54,6 +54,8 @@ export default function ReportFoundItemPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [locations, setLocations] = useState<any[]>([]);
   const [safeDesks, setSafeDesks] = useState<any[]>([]);
@@ -73,6 +75,16 @@ export default function ReportFoundItemPage() {
   });
 
   useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.data) {
+          setCurrentUser(d.data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setAuthChecked(true));
+
     fetch("/api/locations")
       .then((r) => r.json())
       .then((d) => {
@@ -190,6 +202,12 @@ export default function ReportFoundItemPage() {
       return;
     }
 
+    if (!currentUser) {
+      setError("Please sign in before submitting your found item report.");
+      router.push("/login?redirect=/lost-and-found/report-found");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -256,6 +274,23 @@ export default function ReportFoundItemPage() {
           Thank you for keeping AIEM honest. Report belongings discovered across campus. Safe-Desk handovers earn immediate XP, Hunter Coins, and Trust tier boosts.
         </p>
       </div>
+
+      {authChecked && !currentUser && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5 text-amber-300">
+            <Shield className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>
+              You are currently browsing as a guest. <strong>Sign in</strong> so your turn-in report is registered to your hunter profile and coin rewards are deposited to your wallet.
+            </span>
+          </div>
+          <Link
+            href="/login?redirect=/lost-and-found/report-found"
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-bold text-xs shrink-0 transition-all shadow-md text-center"
+          >
+            Sign In Now
+          </Link>
+        </div>
+      )}
 
       {/* Ethical Bounty Banner */}
       <div className="rounded-3xl bg-gradient-to-r from-emerald-500/15 via-cyan-500/10 to-transparent border border-emerald-500/30 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">

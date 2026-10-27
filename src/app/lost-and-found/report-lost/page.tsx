@@ -55,6 +55,8 @@ export default function ReportLostItemPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [locations, setLocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -77,6 +79,16 @@ export default function ReportLostItemPage() {
   });
 
   useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.data) {
+          setCurrentUser(d.data);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setAuthChecked(true));
+
     fetch("/api/locations")
       .then((r) => r.json())
       .then((d) => {
@@ -200,6 +212,12 @@ export default function ReportLostItemPage() {
       return;
     }
 
+    if (!currentUser) {
+      setError("Please sign in before submitting your lost item report.");
+      router.push("/login?redirect=/lost-and-found/report-lost");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -268,6 +286,23 @@ export default function ReportLostItemPage() {
           File a verified campus lost report. Sensitive student identification is automatically redacted to prevent unauthorized claims and safeguard privacy.
         </p>
       </div>
+
+      {authChecked && !currentUser && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2.5 text-amber-300">
+            <Shield className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>
+              You are currently browsing as a guest. <strong>Sign in</strong> with your college account to ensure claim notifications and recovered item alerts are delivered to your portal.
+            </span>
+          </div>
+          <Link
+            href="/login?redirect=/lost-and-found/report-lost"
+            className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-mono font-bold text-xs shrink-0 transition-all shadow-md text-center"
+          >
+            Sign In Now
+          </Link>
+        </div>
+      )}
 
       {/* Structured Stepper Header */}
       <div className="space-y-2">

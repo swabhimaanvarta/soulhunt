@@ -176,7 +176,14 @@ export async function POST(req: NextRequest) {
       // Check if another concurrent request already activated the user
       const existingActive = await User.findOne({ _id: user._id, accountStatus: "ACTIVE" });
       if (existingActive) {
-        return NextResponse.json(
+        const token = await signSessionToken({
+          userId: existingActive._id.toString(),
+          email: existingActive.email,
+          username: existingActive.username,
+          role: existingActive.role,
+        });
+
+        const resp = NextResponse.json(
           {
             success: true,
             message: "Account already verified. Welcome to AIEM Hunt.",
@@ -190,6 +197,8 @@ export async function POST(req: NextRequest) {
           },
           { status: 200 }
         );
+        resp.cookies.set("aiem_session", token, getSessionCookieOptions());
+        return resp;
       }
 
       return NextResponse.json(
