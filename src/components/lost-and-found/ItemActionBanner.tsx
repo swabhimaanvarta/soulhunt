@@ -36,7 +36,12 @@ export default function ItemActionBanner({
   const isFinder = item.finderId && (item.finderId._id?.toString() || item.finderId.toString()) === currentUserId;
   const isStaff = currentUser && ["ADMIN", "MODERATOR", "SAFE_DESK_STAFF"].includes(currentUser.role);
 
-  const myClaim = activeClaim && activeClaim.claimantId?.toString() === currentUserId ? activeClaim : null;
+  const myClaim =
+    activeClaim &&
+    (activeClaim.claimantId?._id?.toString() === currentUserId ||
+      activeClaim.claimantId?.toString() === currentUserId)
+      ? activeClaim
+      : null;
   const hasApprovedClaim = activeClaim && activeClaim.status === "APPROVED";
   const myApprovedClaim = myClaim && myClaim.status === "APPROVED";
   const myPendingClaim = myClaim && myClaim.status === "PENDING";

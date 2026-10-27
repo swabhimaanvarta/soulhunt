@@ -21,6 +21,15 @@ import {
   Clock,
   Send,
   Loader2,
+  Share2,
+  Copy,
+  Check,
+  Maximize2,
+  X,
+  Compass,
+  ArrowRight,
+  ChevronRight,
+  Filter,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -43,6 +52,12 @@ export default function InvestigationRoomClient({
   const [clues, setClues] = useState(initialClues);
   const [userCoins, setUserCoins] = useState(currentUser?.coins ?? 50);
   const { toast } = useToast();
+
+  // Mobile active tab view: "CLUES" | "EVIDENCE" | "PAYOUT"
+  const [mobileTab, setMobileTab] = useState<"CLUES" | "EVIDENCE" | "PAYOUT">("CLUES");
+
+  // Evidence filtering
+  const [evidenceFilter, setEvidenceFilter] = useState<"ALL" | "NOTE" | "PHOTO" | "MAP_PIN" | "THEORY">("ALL");
 
   // Clue solving form
   const [answerInput, setAnswerInput] = useState("");
@@ -68,8 +83,26 @@ export default function InvestigationRoomClient({
   const [claimHandoverCode, setClaimHandoverCode] = useState("");
   const [claimRecoveryNotes, setClaimRecoveryNotes] = useState("");
   const [claimPhotoUrl, setClaimPhotoUrl] = useState("");
+  const [uploadingRecoveryPhoto, setUploadingRecoveryPhoto] = useState(false);
   const [claimResult, setClaimResult] = useState<any>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
+
+  // Lightbox modal for evidence/clue images
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const handleShareRoom = () => {
+    if (typeof window !== "undefined") {
+      navigator.clipboard.writeText(window.location.href);
+      setCopiedLink(true);
+      toast({
+        title: "Mission Link Copied",
+        description: "Investigation room URL copied to clipboard.",
+        variant: "success",
+      });
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
+  };
 
   const handleClaimRecovery = async (customCode?: string) => {
     if (claimingReward) return;
@@ -108,6 +141,47 @@ export default function InvestigationRoomClient({
       setClaimError(e.message || "Failed to process recovery.");
     } finally {
       setClaimingReward(false);
+    }
+  };
+
+  const handleRecoveryPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingRecoveryPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: fd,
+      });
+
+      const json = await res.json();
+      if (!json.success) {
+        toast({
+          title: "Upload Failed",
+          description: json.error || "Failed to upload photo",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setClaimPhotoUrl(json.url);
+      toast({
+        title: "Photo Attached",
+        description: "Recovery proof snapshot attached.",
+        variant: "success",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Upload Error",
+        description: err.message || "Failed to upload photo",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingRecoveryPhoto(false);
     }
   };
 
@@ -316,48 +390,107 @@ export default function InvestigationRoomClient({
     }
   };
 
+  const filteredEvidence = (investigation.evidenceNodes || []).filter((node: any) => {
+    if (evidenceFilter === "ALL") return true;
+    return node.type === evidenceFilter;
+  });
+
+  const totalClues = clues.length;
+  const solvedCount = investigation.solvedClues?.length || 0;
+
   return (
     <div className="space-y-6">
-      {/* Investigation Room Banner */}
-      <div className="rounded-2xl bg-[#111827]/90 border border-white/10 p-6 backdrop-blur-xl shadow-2xl">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <span className="px-3 py-1 rounded-full text-xs font-mono uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold">
+      {/* Investigation Room Tactical HUD Banner */}
+      <div className="rounded-3xl bg-[#111827]/90 border border-white/10 p-5 sm:p-7 backdrop-blur-xl shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 relative z-10">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="px-3 py-1 rounded-full text-xs font-mono uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5" />
                 {squad ? `SQUAD [${squad.tag}] — ${squad.name}` : "SOLO RECON"}
               </span>
-              <span className="font-mono text-sm text-amber-400 font-bold">
+
+              <span className="font-mono text-xs text-amber-400 font-bold bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/25">
                 {quest.questCode}
               </span>
-              <span className="text-xs font-mono text-slate-400">
-                Status: <span className="text-white font-bold">{investigation.status}</span>
+
+              <span
+                className={`text-xs font-mono px-2.5 py-1 rounded-full border font-bold uppercase ${
+                  investigation.status === "COMPLETED"
+                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                    : investigation.status === "READY_FOR_RECOVERY"
+                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    : "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
+                }`}
+              >
+                {investigation.status?.replace(/_/g, " ")}
+              </span>
+
+              {/* Hunter Coin Balance */}
+              <span className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-300 bg-slate-900/80 px-2.5 py-1 rounded-full border border-white/10">
+                <Coins className="w-3.5 h-3.5 text-amber-400" />
+                <span>{userCoins} Coins Available</span>
               </span>
             </div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white">
+
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight text-white">
               {quest.title}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
+
+            <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
               {quest.description}
             </p>
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <button
+                type="button"
+                onClick={handleShareRoom}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-white/10 text-xs font-mono text-slate-300 transition-all cursor-pointer"
+              >
+                {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 text-slate-400" />}
+                <span>{copiedLink ? "Link Copied" : "Share Mission Room"}</span>
+              </button>
+
+              {quest.targetLocationId && (
+                <Link
+                  href={`/map?locationId=${quest.targetLocationId._id || quest.targetLocationId}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-xs font-mono text-cyan-300 transition-all"
+                >
+                  <MapPin className="w-3.5 h-3.5" />
+                  <span>Target Zone Map</span>
+                </Link>
+              )}
+            </div>
           </div>
 
-          <div className="w-full lg:w-80 bg-slate-950/80 border border-white/10 rounded-2xl p-4 space-y-3">
+          {/* Progress Card */}
+          <div className="w-full lg:w-80 bg-slate-950/80 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-3.5 shadow-xl">
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-400">INVESTIGATION PROGRESS</span>
+              <span className="text-slate-400">MISSION PROGRESS</span>
               <span className="text-emerald-400 font-bold">
                 {investigation.progressPct}% COMPLETE
               </span>
             </div>
+
             <div className="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-500"
+                className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-500 shadow-sm shadow-emerald-500/50"
                 style={{ width: `${investigation.progressPct}%` }}
               />
             </div>
+
             <div className="flex items-center justify-between text-[11px] font-mono text-slate-300 pt-1 border-t border-white/5">
-              <span>⭐ {quest.xpReward} XP</span>
-              <span>🪙 {quest.coinReward} Coins</span>
-              <span>🛡️ {quest.squadXpReward} Squad XP</span>
+              <span className="flex items-center gap-1 text-emerald-300 font-bold">
+                ⭐ +{quest.xpReward} XP
+              </span>
+              <span className="flex items-center gap-1 text-amber-300 font-bold">
+                🪙 +{quest.coinReward} Coins
+              </span>
+              <span className="flex items-center gap-1 text-cyan-300 font-bold">
+                🛡️ +{quest.squadXpReward} Squad XP
+              </span>
             </div>
           </div>
         </div>
@@ -365,9 +498,9 @@ export default function InvestigationRoomClient({
 
       {/* Completion Notification Banner */}
       {investigation.status === "COMPLETED" && (
-        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-cyan-950/60 border border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.15)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-emerald-950/60 via-slate-900/90 to-cyan-950/60 border border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.15)] flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
@@ -391,55 +524,120 @@ export default function InvestigationRoomClient({
         </div>
       )}
 
-      {/* Main 3-Column Corkboard Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Clue Chain & Active Stage Solver */}
-        <div className="lg:col-span-4 space-y-4">
-          <div className="rounded-2xl bg-[#111827]/90 border border-white/10 p-5 space-y-4">
-            <h2 className="text-sm font-mono uppercase tracking-wider text-slate-400 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-emerald-400" />
-              Sequential Clue Chain
-            </h2>
+      {/* Responsive Mobile / Tablet Tab Switcher (< lg) */}
+      <div className="lg:hidden flex items-center bg-slate-900/90 p-1.5 rounded-2xl border border-white/10 font-mono text-xs">
+        <button
+          type="button"
+          onClick={() => setMobileTab("CLUES")}
+          className={`flex-1 py-2 px-2 sm:px-3 rounded-xl font-bold transition-all text-[11px] sm:text-xs truncate ${
+            mobileTab === "CLUES"
+              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          Clues ({solvedCount}/{totalClues})
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("EVIDENCE")}
+          className={`flex-1 py-2 px-2 sm:px-3 rounded-xl font-bold transition-all text-[11px] sm:text-xs truncate ${
+            mobileTab === "EVIDENCE"
+              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          Evidence ({investigation.evidenceNodes?.length || 0})
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("PAYOUT")}
+          className={`flex-1 py-2 px-2 sm:px-3 rounded-xl font-bold transition-all text-[11px] sm:text-xs truncate ${
+            mobileTab === "PAYOUT"
+              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          Payout
+        </button>
+      </div>
 
-            <div className="space-y-4">
-              {clues.map((clue: any) => {
+      {/* Main 3-Column Tactical Board Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Column 1: Clue Chain & Active Stage Solver */}
+        <div
+          className={`lg:col-span-4 space-y-4 ${
+            mobileTab !== "CLUES" ? "hidden lg:block" : "block"
+          }`}
+        >
+          <div className="rounded-3xl bg-[#111827]/90 border border-white/10 p-5 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h2 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-2 font-bold">
+                <Shield className="w-4 h-4 text-emerald-400" />
+                Sequential Clue Chain ({solvedCount}/{totalClues})
+              </h2>
+              <span className="text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                ACTIVE RECON
+              </span>
+            </div>
+
+            <div className="space-y-3.5">
+              {clues.map((clue: any, index: number) => {
                 const solvedRecord = investigation.solvedClues?.find(
                   (s: any) => s.stageOrder === clue.stageOrder
                 );
                 const isCurrent = investigation.currentStage === clue.stageOrder;
-                const hint = unlockedHints[clue.stageOrder] || (solvedRecord?.usedHint ? clue.hintText : null);
+                const isHintAlreadyUnlocked =
+                  Boolean(unlockedHints[clue.stageOrder]) ||
+                  Boolean(investigation.unlockedHintStages?.includes(clue.stageOrder)) ||
+                  Boolean(solvedRecord?.usedHint);
+                const hint = unlockedHints[clue.stageOrder] || (isHintAlreadyUnlocked ? clue.hintText : null);
 
                 return (
                   <div
                     key={String(clue._id)}
-                    className={`rounded-xl p-4 border transition-all ${
+                    className={`rounded-2xl p-4 border transition-all ${
                       solvedRecord
                         ? "bg-emerald-950/20 border-emerald-500/30"
                         : isCurrent
-                        ? "bg-amber-950/20 border-amber-500/40"
+                        ? "bg-amber-950/25 border-amber-500/50 shadow-md shadow-amber-500/10"
                         : "bg-slate-900/40 border-white/5 opacity-60"
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-300">
-                        {clue.title}
-                      </span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-mono font-bold ${
+                            solvedRecord
+                              ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
+                              : isCurrent
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse"
+                              : "bg-slate-800 text-slate-500"
+                          }`}
+                        >
+                          {clue.stageOrder || index + 1}
+                        </span>
+                        <span className="text-xs font-mono font-bold text-white">
+                          {clue.title}
+                        </span>
+                      </div>
+
                       {solvedRecord ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                       ) : (
-                        <Lock className="w-4 h-4 text-slate-500" />
+                        <Lock className="w-4 h-4 text-slate-500 shrink-0" />
                       )}
                     </div>
 
-                    <p className="text-xs text-slate-300 leading-relaxed mb-2">
+                    <p className="text-xs text-slate-300 leading-relaxed mb-2 pl-8">
                       {clue.clueText}
                     </p>
 
                     {/* Unlocked Breadcrumb */}
                     {solvedRecord && (
-                      <div className="mt-3 pt-2.5 border-t border-emerald-500/20 space-y-1">
-                        <div className="text-xs text-emerald-300 font-semibold">
-                          🔓 {clue.unlockedBreadcrumbText}
+                      <div className="mt-3 pt-2.5 border-t border-emerald-500/20 pl-8 space-y-1">
+                        <div className="text-xs text-emerald-300 font-semibold flex items-center gap-1.5">
+                          <span>🔓</span>
+                          <span>{clue.unlockedBreadcrumbText}</span>
                         </div>
                         <div className="text-[10px] font-mono text-emerald-400/80">
                           ✓ Solved by {solvedRecord.solvedByName || "Agent"}
@@ -449,9 +647,9 @@ export default function InvestigationRoomClient({
 
                     {/* Hint Section */}
                     {isCurrent && !solvedRecord && (
-                      <div className="pt-2 border-t border-white/5 space-y-2">
+                      <div className="mt-3 pt-2.5 border-t border-white/5 pl-8 space-y-2">
                         {hint ? (
-                          <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg font-mono">
+                          <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl font-mono leading-relaxed">
                             💡 Hint: {hint}
                           </div>
                         ) : (
@@ -459,7 +657,7 @@ export default function InvestigationRoomClient({
                             type="button"
                             onClick={() => handleUnlockHint(clue.stageOrder)}
                             disabled={hintLoading}
-                            className="inline-flex items-center gap-1.5 text-[11px] font-mono text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+                            className="inline-flex items-center gap-1.5 text-xs font-mono text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:pointer-events-none cursor-pointer bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-xl transition-all"
                           >
                             {hintLoading ? (
                               <>
@@ -482,14 +680,15 @@ export default function InvestigationRoomClient({
             </div>
           </div>
 
-          {/* Active Clue Solver Card */}
+          {/* Active Clue Solver Input Card */}
           {currentClue && investigation.status !== "COMPLETED" && (
-            <div className="rounded-2xl bg-slate-900 border border-amber-500/30 p-5 space-y-4">
+            <div className="rounded-3xl bg-slate-900 border border-amber-500/40 p-5 space-y-4 shadow-xl">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold text-amber-400 uppercase">
-                  Stage {currentClue.stageOrder} Input
+                <span className="text-xs font-mono font-bold text-amber-400 uppercase flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Stage {currentClue.stageOrder} Answer Input
                 </span>
-                <span className="text-[10px] font-mono text-slate-400">
+                <span className="text-[10px] font-mono text-slate-400 bg-slate-950 px-2 py-0.5 rounded-md border border-white/5">
                   {currentClue.verificationType}
                 </span>
               </div>
@@ -505,8 +704,8 @@ export default function InvestigationRoomClient({
 
                 <button
                   type="submit"
-                  disabled={solving}
-                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs font-mono flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
+                  disabled={solving || !answerInput.trim()}
+                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs font-mono flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                 >
                   {solving ? (
                     <>
@@ -516,7 +715,7 @@ export default function InvestigationRoomClient({
                   ) : (
                     <>
                       <Send className="w-3.5 h-3.5" />
-                      <span>Submit Clue Answer</span>
+                      <span>Submit Stage Answer</span>
                     </>
                   )}
                 </button>
@@ -542,37 +741,66 @@ export default function InvestigationRoomClient({
           )}
         </div>
 
-        {/* Center Column: Shared Evidence Corkboard */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="rounded-2xl bg-[#111827]/90 border border-white/10 p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        {/* Column 2: Shared Field Evidence Corkboard */}
+        <div
+          className={`lg:col-span-5 space-y-4 ${
+            mobileTab !== "EVIDENCE" ? "hidden lg:block" : "block"
+          }`}
+        >
+          <div className="rounded-3xl bg-[#111827]/90 border border-white/10 p-5 space-y-4 shadow-xl">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
-                <h2 className="text-sm font-mono uppercase tracking-wider text-white font-bold">
-                  Field Evidence Corkboard
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <h2 className="text-xs font-mono uppercase tracking-wider text-white font-bold">
+                  Field Evidence Corkboard ({investigation.evidenceNodes?.length || 0})
                 </h2>
               </div>
+
               <button
+                type="button"
                 onClick={() => setShowEvidenceModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-bold transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-mono font-bold transition-all cursor-pointer"
               >
                 <PlusCircle className="w-3.5 h-3.5" />
-                Pin Evidence
+                <span>Pin Evidence</span>
               </button>
             </div>
 
+            {/* Filter pills */}
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+              {(["ALL", "NOTE", "PHOTO", "MAP_PIN", "THEORY"] as const).map((filter) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setEvidenceFilter(filter)}
+                  className={`px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                    evidenceFilter === filter
+                      ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40 font-bold"
+                      : "bg-slate-950 text-slate-400 border-white/5 hover:text-white"
+                  }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+
+            {/* Evidence nodes */}
             <div className="space-y-3">
-              {investigation.evidenceNodes?.length === 0 ? (
-                <div className="text-center py-12 text-slate-500 text-xs font-mono">
-                  No evidence pinned yet. Be the first to add notes or sightings!
+              {filteredEvidence.length === 0 ? (
+                <div className="text-center py-14 text-slate-500 text-xs font-mono border border-dashed border-white/10 rounded-2xl p-6">
+                  <Camera className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                  <p>No field evidence pinned in this category.</p>
+                  <p className="text-[11px] text-slate-600 mt-1">
+                    Click &ldquo;Pin Evidence&rdquo; to share findings or sightings with your squad.
+                  </p>
                 </div>
               ) : (
-                investigation.evidenceNodes?.map((node: any, idx: number) => {
+                filteredEvidence.map((node: any, idx: number) => {
                   const upvoted = currentUser && node.upvotes?.includes(currentUser.id);
                   return (
                     <div
                       key={node._id || idx}
-                      className="rounded-xl bg-slate-950/80 border border-white/10 p-4 hover:border-cyan-500/40 transition-all space-y-2.5"
+                      className="rounded-2xl bg-slate-950/80 border border-white/10 p-4 hover:border-cyan-500/40 transition-all space-y-2.5"
                     >
                       <div className="flex items-center justify-between">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-bold">
@@ -592,22 +820,35 @@ export default function InvestigationRoomClient({
                       </p>
 
                       {node.photoUrl && (
-                        <div className="rounded-lg overflow-hidden border border-white/10 max-h-48 bg-black/40">
+                        <div
+                          onClick={() => setLightboxImage({ url: node.photoUrl, title: node.title })}
+                          className="relative rounded-xl overflow-hidden border border-white/10 max-h-52 bg-black/40 group cursor-pointer"
+                        >
                           <img
                             src={node.photoUrl}
                             alt={node.title}
-                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              if (!target.src.endsWith("/placeholder-item.png")) {
+                                target.src = "/placeholder-item.png";
+                              }
+                            }}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
+                          <div className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Maximize2 className="w-3.5 h-3.5" />
+                          </div>
                         </div>
                       )}
 
                       <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
                         <button
+                          type="button"
                           onClick={() => handleUpvoteEvidence(node._id)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] transition-all ${
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-mono text-[11px] transition-all cursor-pointer ${
                             upvoted
                               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                              : "bg-slate-900 text-slate-400 hover:text-white"
+                              : "bg-slate-900 text-slate-400 hover:text-white border border-white/5"
                           }`}
                         >
                           <ThumbsUp className="w-3 h-3" />
@@ -625,17 +866,22 @@ export default function InvestigationRoomClient({
           </div>
         </div>
 
-        {/* Right Column: Squad Payout & Recovery Action */}
-        <div className="lg:col-span-3 space-y-4">
-          <div className="rounded-2xl bg-[#111827]/90 border border-white/10 p-5 space-y-4">
-            <h2 className="text-sm font-mono uppercase tracking-wider text-slate-400 flex items-center gap-2">
+        {/* Column 3: Squad Payout & Recovery Action */}
+        <div
+          className={`lg:col-span-3 space-y-4 ${
+            mobileTab !== "PAYOUT" ? "hidden lg:block" : "block"
+          }`}
+        >
+          <div className="rounded-3xl bg-[#111827]/90 border border-white/10 p-5 space-y-4 shadow-xl">
+            <h2 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-2 font-bold border-b border-white/10 pb-3">
               <Users className="w-4 h-4 text-cyan-400" />
               Squad Payout & Recovery
             </h2>
 
-            <div className="p-4 rounded-xl bg-slate-950/90 border border-emerald-500/25 space-y-2">
-              <div className="text-xs font-mono text-emerald-400 uppercase font-bold">
-                Unlocked Target Zone
+            <div className="p-4 rounded-2xl bg-slate-950/90 border border-emerald-500/25 space-y-2">
+              <div className="text-[11px] font-mono text-emerald-400 uppercase font-bold flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Unlocked Target Zone</span>
               </div>
               <div className="text-sm font-bold text-white">
                 {quest.restrictedRoomNote || (quest.targetLocationId?.name || "Campus Main Gate")}
@@ -647,7 +893,7 @@ export default function InvestigationRoomClient({
 
             {/* Final Recovery Button */}
             {investigation.status === "COMPLETED" ? (
-              <div className="w-full py-3.5 px-4 rounded-xl font-bold text-xs font-mono bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-center flex items-center justify-center gap-2">
+              <div className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs font-mono bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-center flex items-center justify-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
                 <span>INVESTIGATION COMPLETED & CREDITED</span>
               </div>
@@ -656,15 +902,20 @@ export default function InvestigationRoomClient({
                 <button
                   type="button"
                   onClick={() => setShowRecoveryModal(true)}
-                  className="w-full py-3 px-4 rounded-xl font-bold text-xs font-mono bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
+                  disabled={solvedCount < totalClues && investigation.status !== "READY_FOR_RECOVERY"}
+                  className="w-full py-3 px-4 rounded-2xl font-bold text-xs font-mono bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Award className="w-4 h-4" />
-                  VERIFY RECOVERY & HANDOVER
+                  <span>
+                    {solvedCount < totalClues && investigation.status !== "READY_FOR_RECOVERY"
+                      ? `SOLVE ALL CLUES TO UNLOCK (${solvedCount}/${totalClues})`
+                      : "VERIFY RECOVERY & HANDOVER"}
+                  </span>
                   <ArrowUpRight className="w-4 h-4" />
                 </button>
                 <Link
                   href={`/items/${quest.linkedLostItemId._id || quest.linkedLostItemId}`}
-                  className="block text-center text-[11px] font-mono text-cyan-400 hover:text-cyan-300"
+                  className="block text-center text-[11px] font-mono text-cyan-400 hover:text-cyan-300 transition-colors"
                 >
                   View item custody ticket →
                 </Link>
@@ -673,11 +924,11 @@ export default function InvestigationRoomClient({
               <button
                 type="button"
                 onClick={() => handleClaimRecovery()}
-                disabled={claimingReward || (investigation.status !== "READY_FOR_RECOVERY" && investigation.progressPct < 90)}
-                className="w-full py-3 px-4 rounded-xl font-bold text-xs font-mono bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                disabled={claimingReward || (investigation.status !== "READY_FOR_RECOVERY" && solvedCount < totalClues)}
+                className="w-full py-3 px-4 rounded-2xl font-bold text-xs font-mono bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 <Award className="w-4 h-4" />
-                {claimingReward ? "Verifying with Campus Ledger..." : "CLAIM TREASURE REWARD"}
+                <span>{claimingReward ? "Verifying with Campus Ledger..." : "CLAIM TREASURE REWARD"}</span>
                 <ArrowUpRight className="w-4 h-4" />
               </button>
             )}
@@ -687,12 +938,21 @@ export default function InvestigationRoomClient({
 
       {/* Add Evidence Modal */}
       {showEvidenceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="rounded-2xl bg-slate-900 border border-white/10 p-6 max-w-lg w-full space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-cyan-400" />
-              Pin Field Evidence to Corkboard
-            </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="rounded-3xl bg-slate-900 border border-white/10 p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                Pin Field Evidence to Corkboard
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowEvidenceModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             <form onSubmit={handleAddEvidence} className="space-y-4">
               <div className="space-y-1">
@@ -703,10 +963,10 @@ export default function InvestigationRoomClient({
                       key={t}
                       type="button"
                       onClick={() => setEvidenceType(t)}
-                      className={`py-1.5 rounded-lg border font-bold transition-all ${
+                      className={`py-1.5 rounded-xl border font-bold transition-all cursor-pointer ${
                         evidenceType === t
                           ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
-                          : "bg-slate-950 text-slate-400 border-white/5"
+                          : "bg-slate-950 text-slate-400 border-white/5 hover:text-white"
                       }`}
                     >
                       {t}
@@ -774,6 +1034,12 @@ export default function InvestigationRoomClient({
                     <img
                       src={evidencePhotoUrl}
                       alt="Uploaded evidence"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.endsWith("/placeholder-item.png")) {
+                          target.src = "/placeholder-item.png";
+                        }
+                      }}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -784,14 +1050,14 @@ export default function InvestigationRoomClient({
                 <button
                   type="button"
                   onClick={() => setShowEvidenceModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white"
+                  className="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={submittingEvidence}
-                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all"
+                  disabled={submittingEvidence || !evidenceTitle || !evidenceContent}
+                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all disabled:opacity-50 cursor-pointer shadow-md shadow-cyan-500/20"
                 >
                   {submittingEvidence ? "Pinning..." : "Pin to Corkboard"}
                 </button>
@@ -803,15 +1069,24 @@ export default function InvestigationRoomClient({
 
       {/* Recovery Submission Modal */}
       {showRecoveryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="rounded-2xl bg-slate-900 border border-emerald-500/30 p-6 max-w-lg w-full space-y-4 shadow-2xl">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Award className="w-5 h-5 text-emerald-400" />
-              Verify Item Recovery & Safe Handover
-            </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="rounded-3xl bg-slate-900 border border-emerald-500/30 p-6 max-w-lg w-full space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Award className="w-5 h-5 text-emerald-400" />
+                Verify Item Recovery & Safe Handover
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowRecoveryModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
             <p className="text-xs text-slate-400 leading-relaxed font-mono">
-              Provide the 6-digit physical handover code from the verified owner or Safe-Desk staff, or attach photo evidence for administrative review.
+              Provide the 6-digit physical handover code from the verified owner or Safe-Desk staff, or attach recovery notes for administrative review.
             </p>
 
             {claimError && (
@@ -855,11 +1130,62 @@ export default function InvestigationRoomClient({
                 />
               </div>
 
+              {/* Photo Evidence in Recovery Modal */}
+              <div className="space-y-2 p-3 rounded-xl bg-slate-950/70 border border-white/5">
+                <div className="flex items-center justify-between text-xs font-mono">
+                  <span className="text-slate-300 flex items-center gap-1.5">
+                    <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                    Attach Recovery Photo / Handover Receipt (Optional)
+                  </span>
+                  {uploadingRecoveryPhoto && <span className="text-cyan-400 animate-pulse">Uploading...</span>}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono border border-white/10 flex items-center gap-1.5 transition-all">
+                    <Camera className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Take Photo / Browse</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleRecoveryPhotoUpload}
+                      disabled={uploadingRecoveryPhoto}
+                      className="hidden"
+                    />
+                  </label>
+                  {claimPhotoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setClaimPhotoUrl("")}
+                      className="text-xs font-mono text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" /> Remove
+                    </button>
+                  )}
+                </div>
+
+                {claimPhotoUrl && (
+                  <div className="relative mt-2 rounded-lg overflow-hidden border border-white/10 h-24 max-w-xs bg-black/40">
+                    <img
+                      src={claimPhotoUrl}
+                      alt="Recovery snapshot"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (!target.src.endsWith("/placeholder-item.png")) {
+                          target.src = "/placeholder-item.png";
+                        }
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowRecoveryModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white"
+                  className="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -867,7 +1193,7 @@ export default function InvestigationRoomClient({
                   type="button"
                   onClick={() => handleClaimRecovery()}
                   disabled={claimingReward}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20"
                 >
                   {claimingReward ? (
                     <>
@@ -892,7 +1218,7 @@ export default function InvestigationRoomClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in zoom-in-95">
           <div className="rounded-3xl bg-slate-900 border border-emerald-500/40 p-8 max-w-md w-full text-center space-y-6 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-400 to-amber-400" />
-            
+
             <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 mx-auto flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
               <Award className="w-8 h-8" />
             </div>
@@ -935,7 +1261,7 @@ export default function InvestigationRoomClient({
               <button
                 type="button"
                 onClick={() => setClaimResult(null)}
-                className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-all"
+                className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-mono transition-all cursor-pointer"
               >
                 Close & Review Case File
               </button>
@@ -943,7 +1269,46 @@ export default function InvestigationRoomClient({
           </div>
         </div>
       )}
+
+      {/* Evidence Lightbox Modal */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div
+            className="relative max-w-3xl w-full max-h-[85vh] rounded-3xl overflow-hidden border border-white/20 bg-slate-950 shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-slate-900/80">
+              <div className="font-mono text-xs text-slate-300 font-bold flex items-center gap-2 truncate">
+                <Camera className="w-4 h-4 text-cyan-400 shrink-0" />
+                <span className="truncate">{lightboxImage.title}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-4 bg-black/60 overflow-hidden">
+              <img
+                src={lightboxImage.url}
+                alt={lightboxImage.title}
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.src.endsWith("/placeholder-item.png")) {
+                    target.src = "/placeholder-item.png";
+                  }
+                }}
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-xl"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
