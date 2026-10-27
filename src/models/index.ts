@@ -180,6 +180,10 @@ export interface IUser extends Document {
   emailVerificationExpiresAt?: Date;
   emailVerificationAttempts?: number;
   emailVerificationResendAfter?: Date;
+  passwordResetCodeHash?: string;
+  passwordResetExpiresAt?: Date;
+  passwordResetAttempts?: number;
+  passwordResetResendAfter?: Date;
   xp: number;
   level: number;
   rankTitle: string;
@@ -254,6 +258,10 @@ const UserSchema = new Schema<IUser>(
     emailVerificationExpiresAt: { type: Date },
     emailVerificationAttempts: { type: Number, default: 0 },
     emailVerificationResendAfter: { type: Date },
+    passwordResetCodeHash: { type: String, select: false },
+    passwordResetExpiresAt: { type: Date },
+    passwordResetAttempts: { type: Number, default: 0 },
+    passwordResetResendAfter: { type: Date },
     xp: { type: Number, default: 0, index: true },
     level: { type: Number, default: 1 },
     rankTitle: { type: String, default: "Rookie Scout" },

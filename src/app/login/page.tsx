@@ -25,6 +25,7 @@ function LoginForm() {
     rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.startsWith("/\\")
       ? rawRedirect
       : "/";
+  const isResetSuccess = searchParams?.get("reset") === "success";
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -102,6 +103,13 @@ function LoginForm() {
 
         {/* Main Login Form */}
         <form onSubmit={handleLogin} className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-5" noValidate={false}>
+          {isResetSuccess && !error && (
+            <div role="status" className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 font-mono">
+              <UserCheck className="w-4 h-4 shrink-0 text-emerald-400" />
+              <span>Password successfully reset! Sign in with your new password.</span>
+            </div>
+          )}
+
           {error && (
             <div id="login-error" role="alert" className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2 font-mono">
               <AlertCircle className="w-4 h-4 shrink-0" />
@@ -136,7 +144,15 @@ function LoginForm() {
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="login-password" className="text-xs font-mono text-slate-300">Password</label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="login-password" className="text-xs font-mono text-slate-300">Password</label>
+              <Link
+                href="/forgot-password"
+                className="text-[11px] font-mono text-emerald-400 hover:text-emerald-300 hover:underline transition-colors cursor-pointer"
+              >
+                Forgot password?
+              </Link>
+            </div>
             <div className="relative flex items-center">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3.5" aria-hidden="true" />
               <input
