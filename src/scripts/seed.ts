@@ -40,6 +40,7 @@ import {
   Event,
   Notification,
 } from "../models";
+import { seedRichItems } from "./seed_rich_items";
 
 export async function runSeed() {
   const uri = process.env.MONGODB_URI || "";
@@ -600,6 +601,9 @@ export async function runSeed() {
     ],
     status: "READY_FOR_RECOVERY",
   });
+
+  // Seed rich showcase campus items and images
+  await seedRichItems();
 
   console.log("✅ Seed complete! Investigation Room ID:", inv._id.toString());
 }

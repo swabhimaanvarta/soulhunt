@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "seed": "tsx src/scripts/seed.ts",
+    "seed:items": "tsx src/scripts/seed_rich_items.ts",
     "test": "tsx src/scripts/run_safe_tests.ts",
     "test:concurrency": "tsx src/scripts/test_concurrency_and_scoping.ts",
     "test:personas": "tsx src/scripts/test_personas_and_full_lifecycle.ts",

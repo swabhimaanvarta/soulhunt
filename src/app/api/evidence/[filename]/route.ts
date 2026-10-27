@@ -26,8 +26,19 @@ export async function GET(
 
     // 1. Check if this file is published as a public listing photo on a Lost or Found item
     const [publicLost, publicFound] = await Promise.all([
-      LostItem.exists({ $or: [{ photoUrl: { $regex: filename } }, { photos: { $regex: filename } }] }),
-      FoundItem.exists({ $or: [{ photoUrl: { $regex: filename } }, { blurredPhotoUrl: { $regex: filename } }] }),
+      LostItem.exists({
+        $or: [
+          { photoUrl: { $regex: filename } },
+          { blurredPhotoUrl: { $regex: filename } },
+          { photos: { $regex: filename } },
+        ],
+      }),
+      FoundItem.exists({
+        $or: [
+          { photoUrl: { $regex: filename } },
+          { blurredPhotoUrl: { $regex: filename } },
+        ],
+      }),
     ]);
 
     let isAuthorized = Boolean(publicLost || publicFound);
