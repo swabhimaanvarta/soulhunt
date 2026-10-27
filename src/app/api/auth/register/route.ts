@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
         existingByEmail.emailVerificationResendAfter = new Date(Date.now() + 60 * 1000);
         await existingByEmail.save();
 
-        await sendEmailVerificationChallenge(normalizedEmail, existingByEmail.displayName, code);
+        const deliveryMethod = await sendEmailVerificationChallenge(normalizedEmail, existingByEmail.displayName, code);
 
         return NextResponse.json(
           {
@@ -148,6 +148,9 @@ export async function POST(req: NextRequest) {
             pendingVerification: true,
             message: "A verification code has been dispatched to your college email.",
             email: normalizedEmail,
+            ...(process.env.NODE_ENV !== "production" || deliveryMethod === "DEV_CONSOLE"
+              ? { devClearanceCode: code }
+              : {}),
           },
           { status: 200 }
         );
@@ -193,7 +196,7 @@ export async function POST(req: NextRequest) {
     });
 
     // 6. Deliver OTP challenge via Nodemailer SMTP or dev server stdout
-    await sendEmailVerificationChallenge(normalizedEmail, displayName, code);
+    const deliveryMethod = await sendEmailVerificationChallenge(normalizedEmail, displayName, code);
 
     return NextResponse.json(
       {
@@ -202,6 +205,9 @@ export async function POST(req: NextRequest) {
         message: "Operative dossier registered! Enter the 6-digit clearance code sent to your college inbox.",
         email: newUser.email,
         username: newUser.username,
+        ...(process.env.NODE_ENV !== "production" || deliveryMethod === "DEV_CONSOLE"
+          ? { devClearanceCode: code }
+          : {}),
       },
       { status: 201 }
     );

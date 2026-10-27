@@ -4,7 +4,7 @@ import { z } from "zod";
 import { connectDB } from "@/lib/db";
 import { User } from "@/models";
 import { signSessionToken, getSessionCookieOptions } from "@/lib/jwt";
-import { checkRateLimit, getClientIp } from "@/lib/rateLimit";
+import { checkRateLimit, peekRateLimit, resetRateLimit, getClientIp } from "@/lib/rateLimit";
 
 const LoginSchema = z.object({
   identifier: z.string().min(1),
@@ -29,9 +29,10 @@ export async function POST(req: NextRequest) {
 
     const { identifier, password } = parsed.data;
     const cleanId = identifier.trim().toLowerCase();
+    const rateLimitKey = `login_${clientIp}_${cleanId}`;
 
-    // 1. Rate limiting (max 5 failed attempts per 5 minutes per identifier/IP)
-    const limit = await checkRateLimit(`login_${clientIp}_${cleanId}`, 5, 300);
+    // 1. Rate limiting check (peek: max 5 failed attempts per 5 minutes per identifier/IP)
+    const limit = await peekRateLimit(rateLimitKey, 5);
     if (!limit.allowed) {
       return NextResponse.json(
         {
@@ -47,11 +48,20 @@ export async function POST(req: NextRequest) {
 
     await connectDB();
 
+    // Case-insensitive user lookup with safe regex escaping
+    const escapedId = cleanId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const user = await User.findOne({
-      $or: [{ email: cleanId }, { username: cleanId }],
+      $or: [
+        { email: cleanId },
+        { email: { $regex: new RegExp(`^${escapedId}$`, "i") } },
+        { username: cleanId },
+        { username: { $regex: new RegExp(`^${escapedId}$`, "i") } },
+      ],
     }).select("+passwordHash");
 
     if (!user) {
+      // Record failed login attempt
+      await checkRateLimit(rateLimitKey, 5, 300);
       return NextResponse.json(
         {
           success: false,
@@ -88,6 +98,8 @@ export async function POST(req: NextRequest) {
 
     const isValid = await bcrypt.compare(password, user.passwordHash);
     if (!isValid) {
+      // Record failed password attempt
+      await checkRateLimit(rateLimitKey, 5, 300);
       return NextResponse.json(
         {
           success: false,
@@ -96,6 +108,9 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    // Successfully authenticated: clear any failed attempt record
+    await resetRateLimit(rateLimitKey);
 
     const token = await signSessionToken({
       userId: user._id.toString(),

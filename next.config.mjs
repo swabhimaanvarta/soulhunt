@@ -1,6 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  webpack: (config, { dev }) => {
+    // In local development on Windows, use in-memory cache to prevent
+    // PackFileCacheStrategy ENOENT file-locking errors ('0.pack.gz_' -> '0.pack.gz')
+    // which cause CSS chunk 404s and missing module errors.
+    if (dev) {
+      config.cache = {
+        type: "memory",
+      };
+    }
+    return config;
+  },
   experimental: {},
   async headers() {
     return [

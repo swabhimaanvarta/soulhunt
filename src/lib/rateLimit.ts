@@ -43,6 +43,61 @@ export function getClientIp(req: NextRequest): string {
 }
 
 /**
+ * Check if an identifier/key has already exceeded rate limits without incrementing points.
+ */
+export async function peekRateLimit(
+  key: string,
+  maxPoints: number
+): Promise<{ allowed: boolean; remaining: number; resetSeconds: number }> {
+  const now = Date.now();
+
+  // In non-production or for local testing, relax points to avoid locking out developer
+  const effectiveMaxPoints = process.env.NODE_ENV !== "production" ? Math.max(maxPoints, 50) : maxPoints;
+
+  if (process.env.NODE_ENV === "production") {
+    try {
+      await connectDB();
+      const record = await RateLimitRecord.findOne({ key });
+      if (!record || record.expireAt <= new Date(now)) {
+        return { allowed: true, remaining: effectiveMaxPoints, resetSeconds: 0 };
+      }
+      const count = record.points || 0;
+      const allowed = count < effectiveMaxPoints;
+      const remaining = Math.max(0, effectiveMaxPoints - count);
+      const resetSeconds = Math.max(0, Math.ceil((record.expireAt.getTime() - now) / 1000));
+      return { allowed, remaining, resetSeconds };
+    } catch {
+      // Fallback to memory
+    }
+  }
+
+  const bucket = memoryBuckets.get(key);
+  if (!bucket || bucket.resetAt <= now) {
+    return { allowed: true, remaining: effectiveMaxPoints, resetSeconds: 0 };
+  }
+
+  const allowed = bucket.count < effectiveMaxPoints;
+  const remaining = Math.max(0, effectiveMaxPoints - bucket.count);
+  const resetSeconds = Math.max(0, Math.ceil((bucket.resetAt - now) / 1000));
+  return { allowed, remaining, resetSeconds };
+}
+
+/**
+ * Reset / clear rate-limit points for an identifier/key upon successful action
+ */
+export async function resetRateLimit(key: string): Promise<void> {
+  memoryBuckets.delete(key);
+  if (process.env.NODE_ENV === "production") {
+    try {
+      await connectDB();
+      await RateLimitRecord.deleteOne({ key });
+    } catch {
+      // Ignore DB errors during reset
+    }
+  }
+}
+
+/**
  * Check and record a rate-limit point for an identifier/key
  */
 export async function checkRateLimit(
@@ -51,6 +106,7 @@ export async function checkRateLimit(
   windowSeconds: number
 ): Promise<{ allowed: boolean; remaining: number; resetSeconds: number }> {
   const now = Date.now();
+  const effectiveMaxPoints = process.env.NODE_ENV !== "production" ? Math.max(maxPoints, 50) : maxPoints;
 
   // If in production, use MongoDB-backed atomic TTL record
   if (process.env.NODE_ENV === "production") {
@@ -85,8 +141,8 @@ export async function checkRateLimit(
       );
 
       const count = record.points;
-      const allowed = count <= maxPoints;
-      const remaining = Math.max(0, maxPoints - count);
+      const allowed = count <= effectiveMaxPoints;
+      const remaining = Math.max(0, effectiveMaxPoints - count);
       const resetSeconds = Math.max(0, Math.ceil((record.expireAt.getTime() - now) / 1000));
 
       return { allowed, remaining, resetSeconds };
@@ -100,12 +156,12 @@ export async function checkRateLimit(
   if (!bucket || bucket.resetAt <= now) {
     bucket = { count: 1, resetAt: now + windowSeconds * 1000 };
     memoryBuckets.set(key, bucket);
-    return { allowed: true, remaining: maxPoints - 1, resetSeconds: windowSeconds };
+    return { allowed: true, remaining: effectiveMaxPoints - 1, resetSeconds: windowSeconds };
   }
 
   bucket.count += 1;
-  const allowed = bucket.count <= maxPoints;
-  const remaining = Math.max(0, maxPoints - bucket.count);
+  const allowed = bucket.count <= effectiveMaxPoints;
+  const remaining = Math.max(0, effectiveMaxPoints - bucket.count);
   const resetSeconds = Math.max(0, Math.ceil((bucket.resetAt - now) / 1000));
 
   return { allowed, remaining, resetSeconds };

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Compass,
   Lock,
@@ -15,10 +15,17 @@ import {
   KeyRound,
   RotateCcw,
   Loader2,
+  Eye,
+  EyeOff,
+  Sparkles,
 } from "lucide-react";
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryEmail = searchParams?.get("email");
+  const queryPending = searchParams?.get("pending");
+
   const [formData, setFormData] = useState({
     email: "",
     username: "",
@@ -28,6 +35,7 @@ export default function RegisterPage() {
     yearOfStudy: 2,
   });
 
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -36,8 +44,17 @@ export default function RegisterPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [targetEmail, setTargetEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
+
+  useEffect(() => {
+    if (queryEmail && queryPending === "true") {
+      setTargetEmail(queryEmail);
+      setIsVerifying(true);
+      setSuccessMsg("Clearance code required. Please enter the 6-digit verification code to activate your account.");
+    }
+  }, [queryEmail, queryPending]);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
@@ -71,6 +88,9 @@ export default function RegisterPage() {
 
       if (json.pendingVerification) {
         setTargetEmail(json.email || formData.email.toLowerCase().trim());
+        if (json.devClearanceCode) {
+          setDevOtpHint(json.devClearanceCode);
+        }
         setIsVerifying(true);
         setResendCooldown(60);
         setCanResend(false);
@@ -137,6 +157,9 @@ export default function RegisterPage() {
         throw new Error(json.error?.message || "Failed to resend code.");
       }
 
+      if (json.devClearanceCode) {
+        setDevOtpHint(json.devClearanceCode);
+      }
       setSuccessMsg("A fresh clearance code has been dispatched to your mailbox.");
       setResendCooldown(60);
       setCanResend(false);
@@ -215,6 +238,24 @@ export default function RegisterPage() {
                 className="w-full text-center tracking-[0.5em] text-2xl font-mono py-3 rounded-xl bg-slate-950 border border-emerald-500/40 text-emerald-300 focus:outline-none focus:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-400"
               />
             </div>
+
+            {devOtpHint && (
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider block">
+                    Dev Clearance Code
+                  </span>
+                  <span className="text-sm font-mono font-bold text-white tracking-widest">{devOtpHint}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOtpCode(devOtpHint)}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
+                >
+                  Insert Code
+                </button>
+              </div>
+            )}
 
             <button
               type="submit"
@@ -362,20 +403,30 @@ export default function RegisterPage() {
 
               <div className="space-y-1">
                 <label htmlFor="reg-password" className="text-xs font-mono text-slate-300">Password (8+ chars) *</label>
-                <input
-                  id="reg-password"
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  aria-required="true"
-                  aria-invalid={!!error}
-                  aria-describedby={error ? "reg-error" : undefined}
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-400"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    id="reg-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    autoComplete="new-password"
+                    aria-required="true"
+                    aria-invalid={!!error}
+                    aria-describedby={error ? "reg-error" : undefined}
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full pl-3 pr-10 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 text-slate-400 hover:text-slate-200 transition-colors p-1"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -407,5 +458,19 @@ export default function RegisterPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#070A0F] text-slate-400 font-mono text-xs flex items-center justify-center">
+          Loading registration terminal...
+        </div>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

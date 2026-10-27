@@ -13,6 +13,8 @@ import {
   Sparkles,
   UserCheck,
   Loader2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 function LoginForm() {
@@ -22,6 +24,7 @@ function LoginForm() {
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef(false);
@@ -65,9 +68,9 @@ function LoginForm() {
     }
   };
 
-  const handleQuickFill = (roleOrEmail: string) => {
-    setIdentifier(roleOrEmail);
-    setPassword("");
+  const handleQuickFill = (email: string, pass: string) => {
+    setIdentifier(email);
+    setPassword(pass);
     setError(null);
   };
 
@@ -138,7 +141,7 @@ function LoginForm() {
               <input
                 id="login-password"
                 name="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 required
                 autoComplete="current-password"
                 aria-required="true"
@@ -147,8 +150,16 @@ function LoginForm() {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400"
+                className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-emerald-400"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 text-slate-400 hover:text-slate-200 transition-colors p-1"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
@@ -172,33 +183,42 @@ function LoginForm() {
 
           {/* Quick Identifier Helper */}
           <div className="pt-2 border-t border-white/5 space-y-2">
-            <p className="text-[10px] font-mono text-slate-500 uppercase tracking-wider text-center">
-              Quick Role Identifier
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                Quick Role Autofill (Dev/Demo)
+              </p>
+              <span className="text-[9px] font-mono text-slate-500">1-click credentials</span>
+            </div>
             <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 disabled={loading}
-                onClick={() => handleQuickFill("rahul@aiemgoa.ac.in")}
-                className="py-1.5 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold transition-all disabled:opacity-50 disabled:pointer-events-none"
+                onClick={() => handleQuickFill("rahul@aiemgoa.ac.in", "Hunter@123")}
+                className="p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-left transition-all disabled:opacity-50 flex flex-col justify-between"
               >
-                Student Hunter
+                <div className="text-[10px] font-mono font-bold leading-tight">Student Hunter</div>
+                <div className="text-[8px] text-slate-400 font-mono mt-1 truncate">rahul@aiemgoa.ac.in</div>
+                <div className="text-[8px] text-emerald-400/90 font-mono">Hunter@123</div>
               </button>
               <button
                 type="button"
                 disabled={loading}
-                onClick={() => handleQuickFill("safedesk@aiemgoa.ac.in")}
-                className="py-1.5 px-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-[10px] font-mono font-bold transition-all disabled:opacity-50 disabled:pointer-events-none"
+                onClick={() => handleQuickFill("mod@aiemgoa.ac.in", "Mod@123")}
+                className="p-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-left transition-all disabled:opacity-50 flex flex-col justify-between"
               >
-                Safe-Desk Staff
+                <div className="text-[10px] font-mono font-bold leading-tight">Safe-Desk Mod</div>
+                <div className="text-[8px] text-slate-400 font-mono mt-1 truncate">mod@aiemgoa.ac.in</div>
+                <div className="text-[8px] text-cyan-400/90 font-mono">Mod@123</div>
               </button>
               <button
                 type="button"
                 disabled={loading}
-                onClick={() => handleQuickFill("admin@aiemgoa.ac.in")}
-                className="py-1.5 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-[10px] font-mono font-bold transition-all disabled:opacity-50 disabled:pointer-events-none"
+                onClick={() => handleQuickFill("admin@aiemgoa.ac.in", "Admin@123")}
+                className="p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-left transition-all disabled:opacity-50 flex flex-col justify-between"
               >
-                Admin Control
+                <div className="text-[10px] font-mono font-bold leading-tight">Admin Control</div>
+                <div className="text-[8px] text-slate-400 font-mono mt-1 truncate">admin@aiemgoa.ac.in</div>
+                <div className="text-[8px] text-amber-400/90 font-mono">Admin@123</div>
               </button>
             </div>
           </div>
