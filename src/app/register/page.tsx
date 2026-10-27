@@ -44,7 +44,6 @@ function RegisterForm() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [targetEmail, setTargetEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(60);
   const [canResend, setCanResend] = useState(false);
 
@@ -118,9 +117,6 @@ function RegisterForm() {
 
       if (json.pendingVerification) {
         setTargetEmail(json.email || cleanEmail);
-        if (json.devClearanceCode) {
-          setDevOtpHint(json.devClearanceCode);
-        }
         setIsVerifying(true);
         setResendCooldown(60);
         setCanResend(false);
@@ -185,9 +181,6 @@ function RegisterForm() {
         throw new Error(json.error?.message || "Failed to resend code.");
       }
 
-      if (json.devClearanceCode) {
-        setDevOtpHint(json.devClearanceCode);
-      }
       setSuccessMsg("A fresh clearance code has been dispatched to your mailbox.");
       setResendCooldown(60);
       setCanResend(false);
@@ -267,24 +260,6 @@ function RegisterForm() {
               />
             </div>
 
-            {devOtpHint && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <span className="text-[10px] font-mono text-emerald-400 font-bold uppercase tracking-wider block">
-                    Dev Clearance Code
-                  </span>
-                  <span className="text-sm font-mono font-bold text-white tracking-widest">{devOtpHint}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setOtpCode(devOtpHint)}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono text-xs font-bold transition-all shadow-md shadow-emerald-500/20 cursor-pointer"
-                >
-                  Insert Code
-                </button>
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={loading || otpCode.length !== 6}
@@ -319,7 +294,6 @@ function RegisterForm() {
                 onClick={() => {
                   setIsVerifying(false);
                   setOtpCode("");
-                  setDevOtpHint(null);
                   setError(null);
                   setSuccessMsg(null);
                 }}

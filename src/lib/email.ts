@@ -27,11 +27,28 @@ export async function sendEmailVerificationChallenge(
   displayName: string,
   code: string
 ): Promise<"SMTP" | "DEV_CONSOLE"> {
-  const smtpHost = process.env.SMTP_HOST;
+  const smtpHost = process.env.SMTP_HOST?.trim();
   const smtpPort = parseInt(process.env.SMTP_PORT || "587", 10);
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const smtpFrom = process.env.SMTP_FROM || "AIEM Hunt Security <security@aiemgoa.ac.in>";
+  const smtpUser = process.env.SMTP_USER?.trim();
+  const smtpPass = process.env.SMTP_PASS?.replace(/\s+/g, "");
+  const rawFrom = process.env.SMTP_FROM?.trim();
+  let smtpFrom = "AIEM Hunt Security <security@aiemgoa.ac.in>";
+  if (rawFrom) {
+    if (rawFrom.includes("<") && rawFrom.includes(">")) {
+      smtpFrom = rawFrom;
+    } else {
+      const emailMatch = rawFrom.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      if (emailMatch) {
+        const extractedEmail = emailMatch[1];
+        const displayName = rawFrom.replace(extractedEmail, "").replace(/powered by/i, "").trim() || "AIEM Hunt Security";
+        smtpFrom = `${displayName} <${extractedEmail}>`;
+      } else if (smtpUser) {
+        smtpFrom = `${rawFrom} <${smtpUser}>`;
+      }
+    }
+  } else if (smtpUser) {
+    smtpFrom = `AIEM Hunt Security <${smtpUser}>`;
+  }
 
   // If live SMTP credentials are provided, dispatch via Nodemailer
   if (smtpHost && smtpUser && smtpPass) {

@@ -72,12 +72,6 @@ function LoginForm() {
     }
   };
 
-  const handleQuickFill = (email: string, pass: string) => {
-    setIdentifier(email);
-    setPassword(pass);
-    setError(null);
-  };
-
   return (
     <div className="min-h-[calc(100vh-140px)] flex items-center justify-center px-4 sm:px-6 lg:px-8 py-12">
       <div className="max-w-md w-full space-y-8">
@@ -190,48 +184,6 @@ function LoginForm() {
               </>
             )}
           </button>
-
-          {/* Quick Identifier Helper */}
-          <div className="pt-2 border-t border-white/5 space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
-                Quick Role Autofill (Dev/Demo)
-              </p>
-              <span className="text-[9px] font-mono text-slate-500">1-click credentials</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleQuickFill("rahul@aiemgoa.ac.in", "Hunter@123")}
-                className="p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-left transition-all disabled:opacity-50 flex flex-col justify-between"
-              >
-                <div className="text-[10px] font-mono font-bold leading-tight">Student Hunter</div>
-                <div className="text-[8px] text-slate-400 font-mono mt-1 truncate">rahul@aiemgoa.ac.in</div>
-                <div className="text-[8px] text-emerald-400/90 font-mono">Hunter@123</div>
-              </button>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleQuickFill("mod@aiemgoa.ac.in", "Mod@123")}
-                className="p-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-left transition-all disabled:opacity-50 flex flex-col justify-between"
-              >
-                <div className="text-[10px] font-mono font-bold leading-tight">Safe-Desk Mod</div>
-                <div className="text-[8px] text-slate-400 font-mono mt-1 truncate">mod@aiemgoa.ac.in</div>
-                <div className="text-[8px] text-cyan-400/90 font-mono">Mod@123</div>
-              </button>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => handleQuickFill("admin@aiemgoa.ac.in", "Admin@123")}
-                className="p-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-left transition-all disabled:opacity-50 flex flex-col justify-between"
-              >
-                <div className="text-[10px] font-mono font-bold leading-tight">Admin Control</div>
-                <div className="text-[8px] text-slate-400 font-mono mt-1 truncate">admin@aiemgoa.ac.in</div>
-                <div className="text-[8px] text-amber-400/90 font-mono">Admin@123</div>
-              </button>
-            </div>
-          </div>
 
           <div className="text-center pt-2 border-t border-white/5 text-xs text-slate-400">
             Need an AIEM Hunter account?{" "}

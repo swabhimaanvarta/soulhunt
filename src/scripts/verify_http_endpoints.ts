@@ -4,7 +4,7 @@ async function verifyEndpoints() {
   const loginRes = await fetch("http://localhost:3000/login");
   console.log("GET /login HTTP Status:", loginRes.status);
   const loginHtml = await loginRes.text();
-  console.log("✓ Login page rendered properly:", loginHtml.includes("Quick Role Autofill"));
+  console.log("✓ Login page rendered properly:", loginHtml.includes("Sign In to AIEM Hunt"));
 
   const regRes = await fetch("http://localhost:3000/register");
   console.log("GET /register HTTP Status:", regRes.status);

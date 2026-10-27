@@ -87,9 +87,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "A new clearance code has been dispatched to your institutional inbox.",
-      ...(process.env.NODE_ENV !== "production" || deliveryMethod === "DEV_CONSOLE"
-        ? { devClearanceCode: code }
-        : {}),
     });
   } catch (error: any) {
     console.error("[POST /api/auth/resend-code] Error:", error);
