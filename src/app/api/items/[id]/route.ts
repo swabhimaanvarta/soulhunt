@@ -96,9 +96,9 @@ export async function GET(
       // Strip linked quest — prevents leaking mystery clues & answers
       delete item.linkedQuestId;
 
-      // Signal whether a verification challenge exists (without revealing it)
+      // Signal whether a verification challenge exists and provide the question for claimant answers
+      // (The secret answer hash remains crypted and stripped via verificationAnswerHash deletion above)
       item.hasVerificationQuestion = Boolean(item.verificationQuestion);
-      delete item.verificationQuestion;
     }
 
     // ------------------------------------------------------------------

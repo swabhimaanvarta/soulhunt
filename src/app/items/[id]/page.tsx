@@ -1175,21 +1175,42 @@ export default function ItemDetailPage() {
                 </div>
 
                 {(item.hasVerificationQuestion || item.verificationQuestion) && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-mono text-slate-300 flex items-center gap-1.5">
-                      <Lock className="w-3.5 h-3.5 text-cyan-400" />
-                      <span>Secret Verification Answer (Optional Instant Match)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter secret answer if known (e.g. sticker inside case, battery serial)..."
-                      value={answerProvided}
-                      onChange={(e) => setAnswerProvided(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-400 font-mono"
-                    />
-                    <p className="text-[11px] text-slate-400">
-                      Matches the reporter&apos;s secret hash instantly without waiting for manual review.
-                    </p>
+                  <div className="space-y-2.5 p-3.5 sm:p-4 rounded-2xl bg-cyan-950/40 border border-cyan-500/30">
+                    <div className="flex items-center gap-2 text-xs font-mono font-bold text-cyan-300">
+                      <Lock className="w-4 h-4 text-cyan-400 shrink-0" />
+                      <span>Owner&apos;s Secret Verification Challenge</span>
+                    </div>
+
+                    {item.verificationQuestion ? (
+                      <div className="space-y-1 bg-slate-900/90 p-3 rounded-xl border border-cyan-500/20">
+                        <span className="text-[10px] uppercase font-mono text-cyan-400/90 font-bold tracking-wider">
+                          Question to Answer:
+                        </span>
+                        <p className="text-xs text-white font-medium leading-relaxed">
+                          &ldquo;{item.verificationQuestion}&rdquo;
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-300 italic">
+                        This item has an encrypted verification challenge set by the owner.
+                      </p>
+                    )}
+
+                    <div className="space-y-1.5 pt-0.5">
+                      <label className="text-[11px] font-mono text-slate-300 font-medium">
+                        Your Answer (Optional Instant Match)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder={item.verificationQuestion ? "Enter your answer to the question above..." : "Enter secret answer if known..."}
+                        value={answerProvided}
+                        onChange={(e) => setAnswerProvided(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400 leading-normal">
+                        Matches the reporter&apos;s encrypted secret answer hash directly. If correct, your claim is approved instantly. If you don&apos;t know it, leave it blank and describe ownership proof below.
+                      </p>
+                    </div>
                   </div>
                 )}
 

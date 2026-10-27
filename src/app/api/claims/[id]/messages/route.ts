@@ -79,6 +79,18 @@ export async function GET(
 
     const isSafeDeskCustody = ["DEPOSITED_AT_SAFE_DESK", "SAFE_DESK"].includes(custodyStatus);
 
+    // If the active user has unread coordination notifications for this item,
+    // mark them as read since they are actively viewing the thread now.
+    await Notification.updateMany(
+      {
+        userId: user._id,
+        category: "CLAIM_UPDATE",
+        linkUrl: `/items/${claim.itemId}`,
+        isRead: false,
+      },
+      { $set: { isRead: true } }
+    );
+
     const messages = await HandoverMessage.find({
       claimId: claim._id,
       expiresAt: { $gt: new Date() },
@@ -248,14 +260,43 @@ export async function POST(
       expiresAt,
     });
 
-    // Notify recipient without leaking text or PIN in notification
-    await Notification.create({
+    // Notification suppression and deduplication:
+    // 1. If recipient was active in this chat recently (sent a message in the last 2 minutes),
+    //    they are currently engaged in the conversation and do not need a spam notification.
+    const recentRecipientActivity = await HandoverMessage.findOne({
+      claimId: claim._id,
+      senderId: recipientUserId,
+      createdAt: { $gt: new Date(Date.now() - 2 * 60 * 1000) },
+    });
+
+    // 2. If an unread notification already exists for this claim thread, update its timestamp
+    //    rather than creating duplicate notifications for every message.
+    const existingUnreadNotif = await Notification.findOne({
       userId: recipientUserId,
       category: "CLAIM_UPDATE",
-      title: "New Handover Coordination Message",
-      message: "You have a new coordination update regarding your approved item handover.",
       linkUrl: `/items/${claim.itemId}`,
+      isRead: false,
     });
+
+    if (existingUnreadNotif) {
+      await Notification.updateOne(
+        { _id: existingUnreadNotif._id },
+        {
+          $set: {
+            updatedAt: new Date(),
+            message: "You have new coordination updates regarding your approved item handover.",
+          },
+        }
+      );
+    } else if (!recentRecipientActivity) {
+      await Notification.create({
+        userId: recipientUserId,
+        category: "CLAIM_UPDATE",
+        title: "New Handover Coordination Message",
+        message: "You have a new coordination update regarding your approved item handover.",
+        linkUrl: `/items/${claim.itemId}`,
+      });
+    }
 
     return NextResponse.json(
       {

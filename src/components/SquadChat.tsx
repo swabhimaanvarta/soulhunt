@@ -36,13 +36,22 @@ export default function SquadChat({
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [loadingInitial, setLoadingInitial] = useState(true);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastFetchedTimeRef = useRef<string | null>(null);
   const pollIntervalRef = useRef<number>(5000);
   const isOnlineRef = useRef<boolean>(typeof navigator !== "undefined" ? navigator.onLine : true);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (smooth = true) => {
+    if (scrollContainerRef.current) {
+      if (smooth) {
+        scrollContainerRef.current.scrollTo({
+          top: scrollContainerRef.current.scrollHeight,
+          behavior: "smooth",
+        });
+      } else {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    }
   };
 
   const fetchMessages = useCallback(async (sinceTime?: string | null) => {
@@ -245,7 +254,7 @@ export default function SquadChat({
       </div>
 
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin scrollbar-thumb-white/10">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3.5 scrollbar-thin scrollbar-thumb-white/10">
         {loadingInitial ? (
           <div className="flex items-center justify-center h-full text-slate-500 font-mono text-xs gap-2">
             <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
@@ -308,7 +317,6 @@ export default function SquadChat({
             );
           })
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Error alert */}

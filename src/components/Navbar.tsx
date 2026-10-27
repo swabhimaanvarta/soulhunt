@@ -97,6 +97,15 @@ export default function Navbar() {
     return () => clearInterval(interval);
   }, [fetchSession, pathname]);
 
+  // Sync notifications immediately when active in-chat or when notifications are marked read
+  useEffect(() => {
+    const handleNotificationsUpdated = () => {
+      fetchNotifications();
+    };
+    window.addEventListener("notificationsUpdated", handleNotificationsUpdated);
+    return () => window.removeEventListener("notificationsUpdated", handleNotificationsUpdated);
+  }, [fetchNotifications]);
+
   // Close menus on route change
   useEffect(() => {
     setMobileDrawerOpen(false);

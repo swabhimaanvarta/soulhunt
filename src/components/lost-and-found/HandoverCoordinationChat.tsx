@@ -56,9 +56,24 @@ export default function HandoverCoordinationChat({
   const [reportingId, setReportingId] = useState<string | null>(null);
   const [reportReason, setReportReason] = useState("");
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef<number>(0);
+  const isInitialMountRef = useRef<boolean>(true);
 
   const isSafeDeskHeld = ["DEPOSITED_AT_SAFE_DESK", "SAFE_DESK"].includes(custodyStatus);
+
+  const scrollChatToBottom = (smooth = true) => {
+    if (messageListRef.current) {
+      if (smooth) {
+        messageListRef.current.scrollTo({
+          top: messageListRef.current.scrollHeight,
+          behavior: "smooth",
+        });
+      } else {
+        messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      }
+    }
+  };
 
   const fetchMessages = async () => {
     try {
@@ -66,6 +81,10 @@ export default function HandoverCoordinationChat({
       const data = await res.json();
       if (data.success && data.data?.messages) {
         setMessages(data.data.messages);
+        // Sync active notifications since user is in the chat
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new Event("notificationsUpdated"));
+        }
       }
     } catch {
       // non-blocking
@@ -81,7 +100,17 @@ export default function HandoverCoordinationChat({
   }, [claimId]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length > 0) {
+      if (isInitialMountRef.current) {
+        // Immediate scroll inside chat container without moving window
+        scrollChatToBottom(false);
+        isInitialMountRef.current = false;
+      } else if (messages.length > prevMessageCountRef.current) {
+        // Smooth scroll inside chat container when a new message arrives
+        scrollChatToBottom(true);
+      }
+    }
+    prevMessageCountRef.current = messages.length;
   }, [messages]);
 
   const handleSendMessage = async (textToSend: string, isPreset = false, presetCode = "") => {
@@ -231,7 +260,7 @@ export default function HandoverCoordinationChat({
       </div>
 
       {/* Message List */}
-      <div className="h-60 overflow-y-auto rounded-xl border border-white/5 bg-black/40 p-3 space-y-3">
+      <div ref={messageListRef} className="h-60 overflow-y-auto rounded-xl border border-white/5 bg-black/40 p-3 space-y-3">
         {loading ? (
           <div className="flex h-full items-center justify-center text-xs font-mono text-slate-500">
             Loading coordination thread...
@@ -276,7 +305,6 @@ export default function HandoverCoordinationChat({
             </div>
           ))
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Reporting Modal / Inline Form */}
