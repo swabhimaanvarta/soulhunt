@@ -19,25 +19,81 @@ export async function createAIGameMasterQuest(options: GenerateQuestOptions = {}
     throw new Error("No campus locations available to anchor the quest.");
   }
 
-  // 2. Fetch course curriculum details if courseId is provided
-  let courseDoc = null;
-  if (options.courseId && Types.ObjectId.isValid(options.courseId)) {
-    courseDoc = await CourseCurriculum.findById(options.courseId).lean();
-    if (courseDoc) {
-      options.courseCode = options.courseCode || courseDoc.courseCode;
-      options.courseName = options.courseName || courseDoc.courseName;
-      options.semester = options.semester || courseDoc.semester;
+  // 2. Fetch and strictly validate course curriculum details (Server-Authoritative Grounding)
+  if (!options.courseId || !Types.ObjectId.isValid(options.courseId)) {
+    throw new Error("A valid courseId is strictly required to anchor quest synthesis in an approved course curriculum.");
+  }
+
+  const courseDoc = await CourseCurriculum.findById(options.courseId).populate("approvedLocationIds").lean();
+  if (!courseDoc) {
+    throw new Error("Specified course curriculum not found in database.");
+  }
+  if (!courseDoc.isActive) {
+    throw new Error(`Course curriculum ${courseDoc.courseCode} is not currently active.`);
+  }
+  if (!courseDoc.isFacultyApproved) {
+    throw new Error(
+      `Course curriculum ${courseDoc.courseCode} is not faculty-approved. Demo or draft curricula must be reviewed and approved by faculty before generating quests.`
+    );
+  }
+
+  // Select module by moduleNumber or moduleId from the verified database record
+  const targetModuleNumber = options.moduleNumber || 1;
+  const targetModule =
+    (courseDoc.modules &&
+      courseDoc.modules.find(
+        (m: any) =>
+          m.moduleNumber === targetModuleNumber ||
+          (options.moduleId && m._id?.toString() === options.moduleId)
+      )) ||
+    courseDoc.modules?.[0];
+
+  if (!targetModule) {
+    throw new Error(`Module ${targetModuleNumber} not found in course curriculum ${courseDoc.courseCode}.`);
+  }
+
+  // Authoritatively overwrite options from the stored database module to prevent client tampering
+  options.courseCode = courseDoc.courseCode;
+  options.courseName = courseDoc.courseName;
+  options.semester = courseDoc.semester;
+  options.moduleTitle = targetModule.title;
+  options.approvedSyllabusText = targetModule.approvedSyllabusText;
+
+  // Validate topic & learning outcome against the module's approved roster
+  if (options.topic && targetModule.topics.includes(options.topic)) {
+    // Valid topic in module
+  } else {
+    options.topic = targetModule.topics[0] || "Core Syllabus Concepts";
+  }
+
+  if (options.learningOutcome && targetModule.learningOutcomes.includes(options.learningOutcome)) {
+    // Valid learning outcome in module
+  } else {
+    options.learningOutcome = targetModule.learningOutcomes[0] || "Analyze syllabus principles";
+  }
+
+  // Roster of approved campus location codes
+  const approvedLocations = (courseDoc.approvedLocationIds || []) as any[];
+  const approvedLocationCodes = approvedLocations
+    .map((l: any) => l.code)
+    .filter(Boolean);
+  options.approvedLocationCodes = approvedLocationCodes;
+  options.approvedLocations = approvedLocations.map((l: any) => ({ code: l.code, name: l.name }));
+
+  // 3. Determine target location (MUST be in course's approved locations if specified)
+  let targetLocation = null;
+  if (options.locationCode) {
+    targetLocation = locations.find((l) => l.code === options.locationCode) || null;
+    if (targetLocation && approvedLocationCodes.length > 0 && !approvedLocationCodes.includes(targetLocation.code)) {
+      throw new Error(
+        `Selected location "${options.locationCode}" is not approved for course ${courseDoc.courseCode}. Approved facilities: ${approvedLocationCodes.join(", ")}.`
+      );
     }
   }
 
-  // 3. Determine target location (prefer course's approved locations if set)
-  let targetLocation = options.locationCode
-    ? locations.find((l) => l.code === options.locationCode)
-    : null;
-
-  if (!targetLocation && courseDoc && Array.isArray(courseDoc.approvedLocationIds) && courseDoc.approvedLocationIds.length > 0) {
-    const courseLocId = courseDoc.approvedLocationIds[0]?.toString();
-    targetLocation = locations.find((l) => l._id.toString() === courseLocId) || null;
+  if (!targetLocation && approvedLocations.length > 0) {
+    const firstApprovedId = approvedLocations[0]._id ? approvedLocations[0]._id.toString() : approvedLocations[0].toString();
+    targetLocation = locations.find((l) => l._id.toString() === firstApprovedId) || locations[0];
   }
 
   if (!targetLocation) {
@@ -49,6 +105,7 @@ export async function createAIGameMasterQuest(options: GenerateQuestOptions = {}
     ...options,
     locationCode: targetLocation.code,
     locationName: targetLocation.name,
+    approvedLocationCodes,
   });
 
   const { data, source, modelName, safetyCheck, fallbackTriggered, fallbackReason } = generated;

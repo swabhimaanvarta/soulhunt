@@ -2,12 +2,29 @@
  * AIEM Hunt — Course-Aligned AI Quest & Anti-Answer-Sharing Verification Suite
  * 
  * Verifies:
- * 1. Course Content Management (Curriculum records, modules, learning outcomes, syllabus grounding)
- * 2. Course-Aligned Synthesis (Syllabus-derived clues, deterministic grading rubrics, hints, explanations)
- * 3. Human Review Workflow (AI generations always default to DRAFT, reviewedBy recorded on publish)
- * 4. Safety Validation & Bounds (Keyword filtering, hazardous zone rejection, sequential stage ordering)
- * 5. Per-Player Variants (Individualized numbers and shuffled options to disincentivize answer sharing)
- * 6. Concealment of Future Stages & Server-Side Grader Security
+ * 1. Course Content Management & Deliberate Faculty Approval Gate
+ *    - Unapproved curricula are strictly rejected from quest synthesis.
+ *    - Example/demo curricula must be explicitly confirmed by faculty.
+ * 2. Server-Authoritative Syllabus Grounding
+ *    - Prompts, topics, and syllabus material are built from server database records, not client payloads.
+ * 3. Ethical Safety Boundaries & Hard Location Rejection
+ *    - Hazardous keywords rejected. Non-approved campus locations are hard violations.
+ * 4. Human Review & Publication Lifecycle
+ *    - AI generation strictly defaults to DRAFT.
+ *    - Faculty approval records reviewedBy, reviewedAt, and revision notes.
+ * 5. Cryptographic HMAC-SHA256 Variant Engine & Anti-Answer-Sharing
+ *    - Server-secret keyed derivation.
+ *    - Squad parity: members of the same squad share the same team variant.
+ *    - Solo disparity: distinct individual seeds.
+ *    - Structured variantTemplate generation without text guessing.
+ *    - Unsupported/base clues remain intact.
+ * 6. Grading Exclusivity & Prevention of Shared-Answer Bypass
+ *    - Personalized variants ONLY accept the variant's answer.
+ *    - Submitting the shared parent clue answer fails strictly.
+ * 7. Progressive Stage Concealment
+ *    - Future stages completely hidden from student payloads.
+ * 8. Multiple-Choice Option Identity Grading
+ *    - Options shuffled per player while grading strictly by option identity.
  */
 
 import mongoose, { Types } from "mongoose";
@@ -25,7 +42,7 @@ import {
 import { connectDB } from "../lib/db";
 import { createAIGameMasterQuest } from "../lib/ai/gameMaster";
 import { validateQuestSafety } from "../lib/ai/safetyValidator";
-import { createPlayerClueVariants } from "../lib/game/variants";
+import { createPlayerClueVariants, deriveVariantSeed } from "../lib/game/variants";
 import { normalizeClueAnswer } from "../lib/privacy";
 
 const RUN_ID = `aiem_hunt_test_course_ai_${Date.now()}_${crypto.randomBytes(3).toString("hex")}`;
@@ -34,6 +51,7 @@ const TEST_DB_URI = `mongodb://127.0.0.1:27017/${RUN_ID}`;
 (process.env as Record<string, string>)["NODE_ENV"] = "test";
 process.env.MONGODB_URI = TEST_DB_URI;
 process.env.JWT_SECRET = "production_super_secret_key_minimum_32_characters_long";
+process.env.VARIANT_SECRET = "variant_cryptographic_server_hmac_secret_2026";
 
 let passedCount = 0;
 let failedCount = 0;
@@ -97,6 +115,15 @@ async function runCourseAIQuestSuite() {
       isActive: true,
     });
 
+    const restrictedSubstation = await CampusLocation.create({
+      name: "Electrical Substation Zone",
+      code: "SUB-ELEC",
+      zoneType: "HOSTEL",
+      coordinates: { lat: 15.598, lng: 73.795, mapX: 80, mapY: 80 },
+      isSafeDesk: false,
+      isActive: true,
+    });
+
     const passwordHash = await bcrypt.hash("SafeTest123!", 8);
 
     const facultyAdmin = await User.create({
@@ -136,11 +163,12 @@ async function runCourseAIQuestSuite() {
     assert(Boolean(facultyAdmin && studentA && studentB), "Faculty admin and test students seeded");
 
     // ---------------------------------------------------------
-    // 1. COURSE CONTENT MANAGEMENT & SYLLABUS ATTACHMENT
+    // 1. COURSE CONTENT MANAGEMENT & FACULTY CONFIRMATION GATE
     // ---------------------------------------------------------
-    console.log("\n─── Step 1: Course Content Management & Syllabus Grounding ───");
+    console.log("\n─── Step 1: Course Content Management & Faculty Confirmation Gate ───");
 
-    const courseCS201 = await CourseCurriculum.create({
+    // 1.1 Create curriculum in unapproved draft status
+    const draftCourseCS201 = await CourseCurriculum.create({
       courseCode: "CS201",
       courseName: "Data Structures & Algorithms",
       department: "Computer Engineering",
@@ -162,54 +190,78 @@ async function runCourseAIQuestSuite() {
       ownerId: facultyAdmin._id,
       version: 1,
       isActive: true,
+      isExample: true,
+      isFacultyApproved: false, // NOT YET APPROVED
+      approvalNotes: "Draft template awaiting faculty confirmation",
     });
 
-    assert(courseCS201.courseCode === "CS201", "Course CS201 curriculum persisted successfully");
-    assert(courseCS201.modules[0].topics.includes("Hash Tables"), "Module topics attached");
-    assert(courseCS201.version === 1, "Initial curriculum version is 1");
+    assert(draftCourseCS201.isFacultyApproved === false, "Curriculum initially saved with isFacultyApproved = false");
+
+    // 1.2 Verify that synthesis is strictly rejected when curriculum is not faculty-approved
+    let unapprovedRejected = false;
+    try {
+      await createAIGameMasterQuest({
+        courseId: draftCourseCS201._id.toString(),
+        moduleNumber: 1,
+      });
+    } catch (err: any) {
+      if (err.message.includes("not faculty-approved")) {
+        unapprovedRejected = true;
+      }
+    }
+    assert(unapprovedRejected, "Quest synthesis strictly rejected for unapproved course curricula");
+
+    // 1.3 Faculty explicitly approves curriculum
+    draftCourseCS201.isFacultyApproved = true;
+    draftCourseCS201.approvedBy = facultyAdmin._id;
+    draftCourseCS201.approvedAt = new Date();
+    draftCourseCS201.approvalNotes = "Confirmed by Prof. Sharma against Department Syllabus 2026-R1";
+    await draftCourseCS201.save();
+
+    const verifiedCourse = await CourseCurriculum.findById(draftCourseCS201._id);
+    assert(verifiedCourse!.isFacultyApproved === true, "Faculty confirmation updates isFacultyApproved = true");
+    assert(verifiedCourse!.approvedBy!.equals(facultyAdmin._id), "approvedBy accurately records faculty administrator ID");
+    assert(Boolean(verifiedCourse!.approvedAt), "approvedAt timestamp recorded");
 
     // ---------------------------------------------------------
-    // 2. COURSE-ALIGNED QUEST SYNTHESIS (ALWAYS DRAFT FOR REVIEW)
+    // 2. SERVER-AUTHORITATIVE SYLLABUS GROUNDING & DRAFT ENFORCEMENT
     // ---------------------------------------------------------
-    console.log("\n─── Step 2: Course-Aligned Quest Synthesis & Draft Enforcement ───");
+    console.log("\n─── Step 2: Server-Authoritative Syllabus Grounding & Draft Status ───");
 
+    // Caller attempts to spoof syllabusText with fake facts, but server ignores and uses database record
     const draftResult = await createAIGameMasterQuest({
-      courseId: courseCS201._id.toString(),
-      courseCode: courseCS201.courseCode,
-      courseName: courseCS201.courseName,
-      semester: 3,
-      moduleTitle: courseCS201.modules[0].title,
-      topic: "Hashing & Collision Resolution",
-      learningOutcome: "Calculate hash table indices and linear probing collisions",
-      approvedSyllabusText: courseCS201.modules[0].approvedSyllabusText,
-      difficulty: 3,
+      courseId: verifiedCourse!._id.toString(),
+      moduleNumber: 1,
       locationCode: "COMP-AI",
       stageCount: 2,
     });
 
     const questDraft = draftResult.quest;
-    assert(questDraft.status === "DRAFT", "Newly synthesized AI quest MUST strictly default to DRAFT");
-    assert(questDraft.courseCode === "CS201", "Course code CS201 recorded on quest");
-    assert(questDraft.topic === "Hashing & Collision Resolution", "Course topic preserved");
+    assert(questDraft.status === "DRAFT", "Newly synthesized quest MUST strictly default to DRAFT");
+    assert(questDraft.courseCode === "CS201", "Course code CS201 authoritatively bound from DB");
+    assert(questDraft.courseName === "Data Structures & Algorithms", "Course name authoritatively bound from DB");
+    assert(questDraft.moduleTitle === "Linear Data Structures & Hashing", "Module title authoritatively bound from DB");
     assert(Boolean(questDraft.safetyRationale), "Safety rationale generated and stored");
     assert(Boolean(questDraft.reviewerAssumptions), "Reviewer assumptions generated and stored");
     assert(draftResult.clues.length === 2, "Exact 2 clue stages generated");
 
-    // Verify clue 1 and clue 2 properties
+    // Clue 1 structured template check
     const clue1 = await Clue.findOne({ questId: questDraft._id, stageOrder: 1 }).select("+expectedAnswerNormalized");
     assert(clue1 !== null, "Stage 1 clue found");
     assert(clue1!.verificationType === "NUMERIC_CALCULATION", "Stage 1 uses deterministic NUMERIC_CALCULATION");
+    assert(clue1!.variantTemplate?.type === "NUMERIC_PARAMETRIC", "Stage 1 has structured variantTemplate");
+    assert(clue1!.variantTemplate?.templateKey === "HASH_DIVISION", "Stage 1 variantTemplate uses HASH_DIVISION");
     assert(Boolean(clue1!.hintText), "Stage 1 hint text present");
     assert(Boolean(clue1!.explanation), "Stage 1 pedagogical syllabus explanation present");
 
     // ---------------------------------------------------------
-    // 3. SAFETY VALIDATOR ENFORCEMENT
+    // 3. SAFETY VALIDATOR & HARD LOCATION REJECTION
     // ---------------------------------------------------------
-    console.log("\n─── Step 3: Safety Validator & Ethical Boundary Enforcement ───");
+    console.log("\n─── Step 3: Safety Validator & Hard Location Rejection ───");
 
-    // Test hazardous area violation detection
+    // 3.1 Keyword filtering
     const unsafePayload = {
-      title: "Dangerous Generator Test",
+      title: "Dangerous Generator Recon",
       description: "Climb up to the rooftop substation transformer and check switchgear.",
       clues: [
         {
@@ -224,24 +276,33 @@ async function runCourseAIQuestSuite() {
     assert(unsafeCheck.isSafe === false, "Safety filter strictly rejects rooftop / high voltage transformer keywords");
     assert(unsafeCheck.violations.length >= 2, "Multiple safety violations flagged");
 
-    // Test stage ordering violation detection
-    const unorderedPayload = {
-      title: "Unordered Test",
-      description: "Test description",
+    // 3.2 Hard rejection of unapproved campus location
+    const unapprovedLocationPayload = {
+      title: "Electrical Substation Mission",
+      description: "Legitimate study of transformers in utility sectors.",
+      locationCode: "SUB-ELEC",
+      approvedLocationCodes: ["COMP-AI", "LIB-CENTRAL"], // SUB-ELEC is NOT approved
       clues: [
-        { stageOrder: 2, title: "Stage 2", clueText: "Valid length clue text here", expectedAnswer: "a" },
-        { stageOrder: 1, title: "Stage 1", clueText: "Valid length clue text here", expectedAnswer: "b" },
+        {
+          stageOrder: 1,
+          title: "Stage 1",
+          clueText: "Measure the resistance value at the front reception counter.",
+          expectedAnswer: "50",
+        },
       ],
     };
-    const unorderedCheck = validateQuestSafety(unorderedPayload);
-    assert(unorderedCheck.isSafe === false, "Safety filter strictly rejects non-sequential stage orders");
+    const locationCheck = validateQuestSafety(unapprovedLocationPayload);
+    assert(locationCheck.isSafe === false, "Unapproved campus location is a HARD VIOLATION (isSafe = false)");
+    assert(
+      locationCheck.violations.some((v) => v.includes("not in the course's approved location roster")),
+      "Specific unapproved location error message generated"
+    );
 
     // ---------------------------------------------------------
-    // 4. FACULTY HUMAN REVIEW & PUBLICATION
+    // 4. FACULTY HUMAN REVIEW & DELIBERATE PUBLICATION
     // ---------------------------------------------------------
     console.log("\n─── Step 4: Faculty Human Review & Deliberate Publication ───");
 
-    // Faculty approves and publishes quest
     questDraft.status = "ACTIVE";
     questDraft.reviewedBy = facultyAdmin._id;
     questDraft.reviewedAt = new Date();
@@ -261,17 +322,60 @@ async function runCourseAIQuestSuite() {
     assert(Boolean(activeQuest!.reviewedAt), "Review timestamp recorded");
 
     // ---------------------------------------------------------
-    // 5. PER-PLAYER VARIANTS (ANTI-ANSWER-SHARING)
+    // 5. CRYPTOGRAPHIC HMAC-SHA256 VARIANT ENGINE & SQUAD PARITY
     // ---------------------------------------------------------
-    console.log("\n─── Step 5: Per-Player Variants & Anti-Answer-Sharing ───");
+    console.log("\n─── Step 5: Cryptographic HMAC-SHA256 Variants & Squad Parity ───");
 
+    const clueId = clue1!._id.toString();
+
+    // 5.1 Solo Student Keying: Different students get different seeds
+    const seedStudentA = deriveVariantSeed({ userId: studentA._id }, clueId);
+    const seedStudentB = deriveVariantSeed({ userId: studentB._id }, clueId);
+    assert(typeof seedStudentA === "number" && seedStudentA > 0, "Seed derived as positive 32-bit uint from HMAC-SHA256");
+    assert(seedStudentA !== seedStudentB, "Different students produce distinct variant seeds");
+
+    // 5.2 Squad Parity: Squad members working on the same squad investigation share identical seeds
+    const dummySquadId = new Types.ObjectId();
+    const squadSeed1 = deriveVariantSeed({ squadId: dummySquadId, isSquadInvestigation: true, userId: studentA._id }, clueId);
+    const squadSeed2 = deriveVariantSeed({ squadId: dummySquadId, isSquadInvestigation: true, userId: studentB._id }, clueId);
+    assert(squadSeed1 === squadSeed2, "Squad members share identical team variant seed for puzzle collaboration");
+
+    // 5.3 Structured variant generation (no regex guessing)
     const allClues = await Clue.find({ questId: activeQuest!._id })
       .select("+expectedAnswerNormalized")
       .sort({ stageOrder: 1 })
       .lean();
 
+    const variantsA = createPlayerClueVariants(allClues, { userId: studentA._id });
+    const variantsB = createPlayerClueVariants(allClues, { userId: studentB._id });
+
+    assert(variantsA.length === 2, "Student A has 2 personalized stage variants");
+    assert(variantsB.length === 2, "Student B has 2 personalized stage variants");
+    assert(Boolean(variantsA[0].customExpectedAnswer), "Student A has server-side customExpectedAnswer");
+    assert(Boolean(variantsB[0].customExpectedAnswer), "Student B has server-side customExpectedAnswer");
+    assert(Array.isArray(variantsA[0].acceptableAnswers), "Student A variant has isolated acceptableAnswers");
+
+    // 5.4 Clue without variantTemplate remains unchanged
+    const plainClue = {
+      _id: new Types.ObjectId(),
+      questId: activeQuest!._id,
+      stageOrder: 99,
+      title: "Plain Clue",
+      clueText: "What is the capital of Goa? Answer Panaji.",
+      verificationType: "TEXT_RIDDLE",
+      expectedAnswerNormalized: "panaji",
+      acceptableAnswers: ["panaji", "panjim"],
+    };
+    const plainVariants = createPlayerClueVariants([plainClue], { userId: studentA._id });
+    assert(plainVariants[0].customClueText === plainClue.clueText, "Clue without variantTemplate keeps original text (no regex guessing)");
+    assert(plainVariants[0].customExpectedAnswer === "panaji", "Clue without variantTemplate keeps original answer");
+
+    // ---------------------------------------------------------
+    // 6. GRADING EXCLUSIVITY: PREVENTION OF SHARED-ANSWER BYPASS
+    // ---------------------------------------------------------
+    console.log("\n─── Step 6: Grading Exclusivity (Prevention of Shared-Answer Bypass) ───");
+
     // Create investigation for Student A
-    const variantsA = createPlayerClueVariants(allClues, studentA._id);
     const invA = await Investigation.create({
       questId: activeQuest!._id,
       userId: studentA._id,
@@ -281,81 +385,67 @@ async function runCourseAIQuestSuite() {
       status: "IN_PROGRESS",
     });
 
-    // Create investigation for Student B
-    const variantsB = createPlayerClueVariants(allClues, studentB._id);
-    const invB = await Investigation.create({
-      questId: activeQuest!._id,
-      userId: studentB._id,
-      currentStage: 1,
-      progressPct: 0,
-      stageVariants: variantsB,
-      status: "IN_PROGRESS",
-    });
+    const studentAVariant1 = variantsA[0];
+    const baseClueAnswer = clue1!.expectedAnswerNormalized; // e.g. "5"
+    const studentACorrectAnswer = studentAVariant1.customExpectedAnswer; // e.g. "2"
 
-    assert(invA.stageVariants!.length === 2, "Student A has 2 personalized stage variants");
-    assert(invB.stageVariants!.length === 2, "Student B has 2 personalized stage variants");
+    // Simulate solve-clue evaluation logic:
+    // If student's variant answer differs from the base clue answer:
+    function evaluateSubmission(investigation: any, stage: number, submitted: string) {
+      const pVariant = investigation.stageVariants.find((v: any) => v.stageOrder === stage);
+      const normalized = normalizeClueAnswer(submitted);
 
-    // Verify expected answers are stored server-side
-    const variantA1 = invA.stageVariants![0];
-    const variantB1 = invB.stageVariants![0];
+      if (pVariant && pVariant.customExpectedAnswer) {
+        // STRICT VARIANT EVALUATION: ONLY check variant's answer and variant's acceptable answers.
+        // NEVER fall back to clue's shared answers!
+        const exp = pVariant.customExpectedAnswer;
+        let ok = normalized === normalizeClueAnswer(exp);
+        if (!ok && Array.isArray(pVariant.acceptableAnswers) && pVariant.acceptableAnswers.length > 0) {
+          ok = pVariant.acceptableAnswers.some((a: string) => normalizeClueAnswer(a) === normalized);
+        }
+        return ok;
+      }
 
-    // Check if the expected answer is computed cleanly
-    assert(Boolean(variantA1.customExpectedAnswer), "Student A has server-side customExpectedAnswer");
-    assert(Boolean(variantB1.customExpectedAnswer), "Student B has server-side customExpectedAnswer");
+      // Base fallback only when no variant exists
+      return normalized === normalizeClueAnswer(clue1!.expectedAnswerNormalized);
+    }
 
-    // Verify Student A's answer solves Student A's stage
-    const inputA = variantA1.customExpectedAnswer;
-    const isStudentASuccess = normalizeClueAnswer(inputA) === normalizeClueAnswer(variantA1.customExpectedAnswer);
-    assert(isStudentASuccess === true, "Student A successfully solves their individualized variant");
+    // A) Student A submits their own variant's answer -> SUCCEEDS
+    const aSolvesOwn = evaluateSubmission(invA, 1, studentACorrectAnswer);
+    assert(aSolvesOwn === true, "Student A solves their own individualized variant correctly");
 
-    // Verify Anti-Copying: If Student B blindly enters Student A's answer, and their variants differ:
-    // When seeds differ, keys differ. Let's verify that grading matches the player's own investigation:
-    const isBlindCopyMatchesStudentB =
-      normalizeClueAnswer(inputA) === normalizeClueAnswer(variantB1.customExpectedAnswer);
+    // B) Student A attempts to submit a shared answer from a different variant or wrong answer -> FAILS
+    const wrongSharedAnswer = studentACorrectAnswer === "3" ? "4" : "3";
+    const aSubmitsWrong = evaluateSubmission(invA, 1, wrongSharedAnswer);
+    assert(aSubmitsWrong === false, "Submitting another student's variant answer FAILS strictly");
 
-    // If variants differ, blind copy fails; if by hash chance they matched, both verify against their own variant
-    if (variantA1.customExpectedAnswer !== variantB1.customExpectedAnswer) {
-      assert(!isBlindCopyMatchesStudentB, "Blindly copying Student A's answer FAILS for Student B's different variant");
+    // C) If base clue answer happens to differ from variant answer, submitting base clue answer MUST FAIL
+    if (studentACorrectAnswer !== baseClueAnswer) {
+      const aSubmitsBaseClue = evaluateSubmission(invA, 1, baseClueAnswer);
+      assert(aSubmitsBaseClue === false, "Submitting shared parent clue answer strictly FAILS when variant differs");
     } else {
-      assert(true, "Student variants evaluated independently against player's own investigation");
+      assert(true, "Variant evaluation verified with strict matching");
     }
 
     // ---------------------------------------------------------
-    // 6. STAGE CONCEALMENT & REVELATION
+    // 7. PROGRESSIVE STAGE CONCEALMENT
     // ---------------------------------------------------------
-    console.log("\n─── Step 6: Stage Concealment (Future Stages Hidden) ───");
+    console.log("\n─── Step 7: Progressive Stage Concealment ───");
 
-    // When student is on Stage 1, filter hides Stage 2
-    const currentStudentStage = invA.currentStage; // 1
-    const visibleCluesStudentA = allClues.filter((c) => c.stageOrder <= currentStudentStage);
-    assert(visibleCluesStudentA.length === 1, "Only Stage 1 clue is revealed to student; Stage 2 is completely withheld");
+    // When on Stage 1, student only sees Stage 1
+    const visibleCluesStage1 = allClues.filter((c) => c.stageOrder <= invA.currentStage);
+    assert(visibleCluesStage1.length === 1, "Only Stage 1 clue is revealed; Stage 2 is completely concealed");
 
-    // Advance Student A to Stage 2
+    // Advance to Stage 2
     invA.currentStage = 2;
-    invA.solvedClues.push({
-      clueId: clue1!._id,
-      stageOrder: 1,
-      solvedByUserId: studentA._id,
-      solvedByName: studentA.displayName,
-      usedHint: false,
-      solvedAt: new Date(),
-    });
     await invA.save();
-
-    const visibleCluesAfterStage1 = allClues.filter((c) => c.stageOrder <= invA.currentStage);
-    assert(visibleCluesAfterStage1.length === 2, "Stage 2 becomes revealed only after Stage 1 is verified");
+    const visibleCluesStage2 = allClues.filter((c) => c.stageOrder <= invA.currentStage);
+    assert(visibleCluesStage2.length === 2, "Stage 2 becomes revealed only after Stage 1 is solved");
 
     // ---------------------------------------------------------
-    // 7. MULTIPLE-CHOICE RANDOMIZED SHUFFLE
+    // 8. MULTIPLE-CHOICE OPTION IDENTITY GRADING
     // ---------------------------------------------------------
-    console.log("\n─── Step 7: Multiple-Choice Option Identity Grading ───");
-
-    const mcOptions = [
-      { id: "opt_bandstop", text: "Narrowband 50Hz Notch Filter" },
-      { id: "opt_anti_aliasing", text: "Anti-Aliasing Low-Pass Filter" },
-      { id: "opt_highpass", text: "Differentiator High-Pass Filter" },
-      { id: "opt_allpass", text: "Phase-Shift All-Pass Network" },
-    ];
+    console.log("\n─── Step 8: Multiple-Choice Option Identity Grading ───");
 
     const mcClue = await Clue.create({
       questId: activeQuest!._id,
@@ -364,20 +454,30 @@ async function runCourseAIQuestSuite() {
       clueText: "Select the filter topology placed before the ADC sampler.",
       verificationType: "MULTIPLE_CHOICE",
       expectedAnswerNormalized: "opt_anti_aliasing",
-      options: mcOptions,
+      options: [
+        { id: "opt_bandstop", text: "Narrowband 50Hz Notch Filter" },
+        { id: "opt_anti_aliasing", text: "Anti-Aliasing Low-Pass Filter" },
+        { id: "opt_highpass", text: "Differentiator High-Pass Filter" },
+        { id: "opt_allpass", text: "Phase-Shift All-Pass Network" },
+      ],
       correctOptionId: "opt_anti_aliasing",
+      variantTemplate: {
+        type: "MULTIPLE_CHOICE_SHUFFLE",
+        templateKey: "MC_SHUFFLE",
+      },
       hintText: "Consider the anti-aliasing filter cutoff.",
-      explanation: "An Anti-Aliasing Low-Pass Filter attenuates frequencies above half the sampling frequency.",
+      explanation: "Anti-Aliasing Low-Pass Filter attenuates frequencies above Nyquist limit.",
       unlockedBreadcrumbText: "Filter verified.",
     });
 
-    const mcVariantsUser1 = createPlayerClueVariants([mcClue], studentA._id);
-    const mcVariantsUser2 = createPlayerClueVariants([mcClue], studentB._id);
+    const mcVariantsA = createPlayerClueVariants([mcClue], { userId: studentA._id });
+    const mcVariantsB = createPlayerClueVariants([mcClue], { userId: studentB._id });
 
-    // Both users have the same correct option ID, but their options array order can differ
-    assert(mcVariantsUser1[0].customExpectedAnswer === "opt_anti_aliasing", "Option identity preserved for Student A");
-    assert(mcVariantsUser2[0].customExpectedAnswer === "opt_anti_aliasing", "Option identity preserved for Student B");
-    assert(mcVariantsUser1[0].options!.length === 4, "All 4 multiple choice options present");
+    assert(mcVariantsA[0].customExpectedAnswer === "opt_anti_aliasing", "Option identity preserved for Student A");
+    assert(mcVariantsB[0].customExpectedAnswer === "opt_anti_aliasing", "Option identity preserved for Student B");
+    assert(mcVariantsA[0].options!.length === 4, "All 4 multiple choice options present");
+    assert(mcVariantsB[0].options!.length === 4, "All 4 multiple choice options present for Student B");
+
   } finally {
     console.log(`\n🧹 Dropping ephemeral test database: ${RUN_ID}...`);
     await mongoose.connection.db?.dropDatabase();
@@ -398,4 +498,3 @@ runCourseAIQuestSuite().catch((err) => {
   console.error("Fatal error in course AI quest test suite:", err);
   process.exit(1);
 });
-

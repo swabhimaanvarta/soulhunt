@@ -123,10 +123,12 @@ export function validateQuestSafety(params: QuestSafetyPayload): SafetyValidatio
     }
   }
 
-  // 4. Approved Campus Location Verification
+  // 4. Approved Campus Location Verification (Hard Rejection if unapproved)
   if (params.locationCode && params.approvedLocationCodes && params.approvedLocationCodes.length > 0) {
     if (!params.approvedLocationCodes.includes(params.locationCode)) {
-      warnings.push(`Location code "${params.locationCode}" is not in the course's approved location roster.`);
+      violations.push(
+        `Location code "${params.locationCode}" is not in the course's approved location roster. Quests must strictly anchor to faculty-approved facilities.`
+      );
     }
   }
 

@@ -467,7 +467,7 @@ function ForgotPasswordForm() {
 
             {/* Resend Code Action */}
             <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs font-mono">
-              <span className="text-slate-400">Didn't receive the code?</span>
+              <span className="text-slate-400">Didn&apos;t receive the code?</span>
               <button
                 type="button"
                 disabled={!canResend || loading}

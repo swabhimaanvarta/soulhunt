@@ -513,6 +513,7 @@ export default function AdminControlPage() {
     fetchCmsQuests,
     fetchCmsEvents,
     fetchCmsLocations,
+    fetchCourses,
     fetchCmsAchievements,
   ]);
 
@@ -864,20 +865,16 @@ export default function AdminControlPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          courseId: selectedCourseId,
+          moduleNumber: activeModule?.moduleNumber || selectedModuleIdx + 1,
+          topic: selectedTopic || activeModule?.topics?.[0],
+          learningOutcome: selectedOutcome || activeModule?.learningOutcomes?.[0],
           prompt: aiPrompt,
           theme: aiTheme,
           difficulty: aiDifficulty,
           questType: aiQuestType,
           locationCode: aiLocationCode || undefined,
           stageCount: aiStageCount,
-          courseId: selectedCourseId || undefined,
-          courseCode: activeCourse?.courseCode,
-          courseName: activeCourse?.courseName,
-          semester: activeCourse?.semester,
-          moduleTitle: activeModule?.title,
-          topic: selectedTopic || activeModule?.topics?.[0],
-          learningOutcome: selectedOutcome || activeModule?.learningOutcomes?.[0],
-          approvedSyllabusText: approvedSyllabusInput || activeModule?.approvedSyllabusText,
           expectedDurationMinutes: aiExpectedDuration,
           preferredProvider: aiProviderChoice,
         }),
@@ -896,6 +893,42 @@ export default function AdminControlPage() {
       showToast(e.message, "error");
     } finally {
       setAiGenerating(false);
+    }
+  };
+
+  // Approve a course curriculum for quest generation
+  const handleApproveCourse = async (courseId: string) => {
+    try {
+      const res = await fetch("/api/admin/courses", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courseId,
+          isFacultyApproved: true,
+          notes: "Approved by faculty administrator via Academic Quest Studio.",
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Failed to approve course.");
+      showToast(json.message);
+      fetchCourses();
+    } catch (e: any) {
+      showToast(e.message, "error");
+    }
+  };
+
+  // Seed baseline example courses in unapproved draft status
+  const handleSeedExampleCourses = async () => {
+    try {
+      const res = await fetch("/api/admin/courses?action=seed-examples", {
+        method: "POST",
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Failed to seed example courses.");
+      showToast(json.message);
+      fetchCourses();
+    } catch (e: any) {
+      showToast(e.message, "error");
     }
   };
 
@@ -2804,21 +2837,68 @@ export default function AdminControlPage() {
                     <form onSubmit={handleAIGenerate} className="space-y-4">
                       {/* Course Curriculum Selector */}
                       <div>
-                        <label className="block text-xs font-mono text-slate-400 mb-1 flex items-center justify-between">
-                          <span>Target Course Curriculum</span>
-                          <span className="text-[10px] text-emerald-400">Approved Syllabus Mode</span>
-                        </label>
-                        <select
-                          value={selectedCourseId}
-                          onChange={(e) => handleCourseChange(e.target.value)}
-                          className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
-                        >
-                          {coursesList.map((c) => (
-                            <option key={c._id} value={c._id}>
-                              [{c.courseCode}] {c.courseName} (Sem {c.semester})
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-mono text-slate-400">Target Course Curriculum</label>
+                          <span className="text-[10px] font-mono text-emerald-400">Server Grounded</span>
+                        </div>
+
+                        {coursesList.length === 0 ? (
+                          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+                            <div className="text-xs font-mono text-amber-300">
+                              ⚠️ No course curricula currently registered.
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleSeedExampleCourses}
+                              className="text-xs font-mono font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 px-3 py-1.5 rounded-lg border border-amber-500/40 transition-colors"
+                            >
+                              🌱 Seed Example Curricula (Draft)
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <select
+                              value={selectedCourseId}
+                              onChange={(e) => handleCourseChange(e.target.value)}
+                              className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+                            >
+                              {coursesList.map((c) => (
+                                <option key={c._id} value={c._id}>
+                                  [{c.courseCode}] {c.courseName} (Sem {c.semester}) {c.isFacultyApproved ? "— Approved" : "— Draft/Example"}
+                                </option>
+                              ))}
+                            </select>
+
+                            {/* Faculty Approval Status Banner & Action */}
+                            {(() => {
+                              const currentCourse = coursesList.find((c) => c._id === selectedCourseId);
+                              if (!currentCourse) return null;
+                              return (
+                                <div className="mt-2 p-2 rounded-lg text-[11px] font-mono border">
+                                  {currentCourse.isFacultyApproved ? (
+                                    <div className="text-emerald-400 flex items-center justify-between">
+                                      <span>✅ Faculty Confirmed & Approved</span>
+                                      <span className="text-[10px] text-slate-400">
+                                        v{currentCourse.version}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-amber-500/10 border-amber-500/30 text-amber-300 p-1.5 rounded">
+                                      <span>⚠️ Unapproved Course Curriculum</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleApproveCourse(currentCourse._id)}
+                                        className="text-[10px] font-bold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded transition-colors self-start sm:self-auto cursor-pointer"
+                                      >
+                                        ✅ Confirm & Approve Curriculum
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </>
+                        )}
                       </div>
 
                       {/* Module & Topic Selection */}
@@ -2992,14 +3072,26 @@ export default function AdminControlPage() {
                         </select>
                       </div>
 
-                      <button
-                        type="submit"
-                        disabled={aiGenerating}
-                        className="w-full py-3 bg-gradient-to-r from-violet-600 via-emerald-600 to-teal-500 hover:from-violet-500 hover:to-emerald-400 text-white font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
-                      >
-                        <Sparkles className={`w-4 h-4 ${aiGenerating ? "animate-spin" : ""}`} />
-                        <span>{aiGenerating ? "Synthesizing Course-Aligned Blueprint..." : "🤖 Synthesize Course-Aligned Quest"}</span>
-                      </button>
+                      {(() => {
+                        const currentCourse = coursesList.find((c) => c._id === selectedCourseId);
+                        const isApproved = Boolean(currentCourse?.isFacultyApproved);
+                        return (
+                          <button
+                            type="submit"
+                            disabled={aiGenerating || !isApproved}
+                            className="w-full py-3 bg-gradient-to-r from-violet-600 via-emerald-600 to-teal-500 hover:from-violet-500 hover:to-emerald-400 text-white font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
+                          >
+                            <Sparkles className={`w-4 h-4 ${aiGenerating ? "animate-spin" : ""}`} />
+                            <span>
+                              {aiGenerating
+                                ? "Synthesizing Course-Aligned Blueprint..."
+                                : !isApproved
+                                ? "⚠️ Faculty Approval Required Before Synthesis"
+                                : "🤖 Synthesize Course-Aligned Quest"}
+                            </span>
+                          </button>
+                        );
+                      })()}
                     </form>
                   </div>
 

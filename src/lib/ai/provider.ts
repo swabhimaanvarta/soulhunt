@@ -35,9 +35,12 @@ export const GeneratedClueSchema = z.object({
   correctOptionId: z.string().optional(),
   unlockedBreadcrumbText: z.string().min(5),
   variantTemplate: z.object({
-    parameterRanges: z.record(z.tuple([z.number(), z.number()])).optional(),
-    formula: z.string().optional(),
+    type: z.enum(["NUMERIC_PARAMETRIC", "MULTIPLE_CHOICE_SHUFFLE", "NONE"]).optional(),
+    templateKey: z.string().optional(),
     templateText: z.string().optional(),
+    parameterRanges: z.record(z.union([z.tuple([z.number(), z.number()]), z.array(z.number())])).optional(),
+    formula: z.string().optional(),
+    explanationTemplate: z.string().optional(),
   }).optional(),
 });
 
@@ -77,6 +80,8 @@ export interface GenerateQuestOptions {
   prompt?: string;
   // Course-aligned fields
   courseId?: string;
+  moduleNumber?: number;
+  moduleId?: string;
   courseCode?: string;
   courseName?: string;
   semester?: number;
@@ -86,6 +91,7 @@ export interface GenerateQuestOptions {
   approvedSyllabusText?: string;
   expectedDurationMinutes?: number;
   approvedLocations?: Array<{ code: string; name: string }>;
+  approvedLocationCodes?: string[];
   // Operational provider selection
   preferredProvider?: "GEMINI" | "OPENAI" | "TEMPLATE" | "AUTO";
   disableFallback?: boolean;
@@ -146,8 +152,15 @@ export async function generateCampusQuest(
     }
   }
 
+  const approvedCodes =
+    options.approvedLocationCodes ||
+    (options.approvedLocations ? options.approvedLocations.map((l) => l.code) : []);
+
   // 3. Deterministic Course-Aligned Local Academic Generator (Zero-dependency fallback)
-  const templateData = generateCourseAlignedTemplate(options);
+  const templateData = generateCourseAlignedTemplate({
+    ...options,
+    approvedLocationCodes: approvedCodes,
+  });
   const safety = validateQuestSafety({
     title: templateData.title,
     description: templateData.description,
@@ -156,6 +169,7 @@ export async function generateCampusQuest(
     xpReward: templateData.xpReward,
     coinReward: templateData.coinReward,
     locationCode: templateData.locationCode,
+    approvedLocationCodes: approvedCodes,
     clues: templateData.clues,
   });
 
@@ -209,6 +223,10 @@ async function generateWithGemini(
     const parsedJson = JSON.parse(rawText);
     const validated = GeneratedQuestDataSchema.parse(parsedJson);
 
+    const approvedCodes =
+      options.approvedLocationCodes ||
+      (options.approvedLocations ? options.approvedLocations.map((l) => l.code) : []);
+
     const safety = validateQuestSafety({
       title: validated.title,
       description: validated.description,
@@ -217,6 +235,7 @@ async function generateWithGemini(
       xpReward: validated.xpReward,
       coinReward: validated.coinReward,
       locationCode: validated.locationCode,
+      approvedLocationCodes: approvedCodes,
       clues: validated.clues,
     });
 
@@ -283,6 +302,10 @@ async function generateWithOpenAI(
     const parsedJson = JSON.parse(rawText);
     const validated = GeneratedQuestDataSchema.parse(parsedJson);
 
+    const approvedCodes =
+      options.approvedLocationCodes ||
+      (options.approvedLocations ? options.approvedLocations.map((l) => l.code) : []);
+
     const safety = validateQuestSafety({
       title: validated.title,
       description: validated.description,
@@ -291,6 +314,7 @@ async function generateWithOpenAI(
       xpReward: validated.xpReward,
       coinReward: validated.coinReward,
       locationCode: validated.locationCode,
+      approvedLocationCodes: approvedCodes,
       clues: validated.clues,
     });
 
@@ -390,7 +414,13 @@ function generateCourseAlignedTemplate(options: GenerateQuestOptions): Generated
   const courseCode = options.courseCode || "CS201";
   const topic = options.topic || "Hashing & Collision Resolution";
   const outcome = options.learningOutcome || "Calculate hash indices and analyze linear probing";
-  const locationCode = options.locationCode || "COMP-AI";
+  const approvedCodes =
+    options.approvedLocationCodes ||
+    (options.approvedLocations ? options.approvedLocations.map((l) => l.code) : []);
+  let locationCode = options.locationCode || (approvedCodes.length > 0 ? approvedCodes[0] : "COMP-AI");
+  if (approvedCodes.length > 0 && !approvedCodes.includes(locationCode)) {
+    locationCode = approvedCodes[0];
+  }
   const stageCount = options.stageCount || 2;
   const duration = options.expectedDurationMinutes || 20;
 
@@ -424,6 +454,14 @@ function generateCourseAlignedTemplate(options: GenerateQuestOptions): Generated
           hintText: "Recall that Nyquist rate is defined as fs_min = 2 * fmax.",
           explanation: `The Nyquist rate is calculated as fs = 2 * fmax = 2 * ${fmax} = ${nyquistRate} Hz. Any lower rate causes spectral folding/aliasing.`,
           unlockedBreadcrumbText: "Sampling threshold confirmed. DSP ADC register calibration unlocked.",
+          variantTemplate: {
+            type: "NUMERIC_PARAMETRIC" as const,
+            templateKey: "NYQUIST_SAMPLING",
+            templateText: `According to the Nyquist-Shannon sampling theorem, what is the theoretical MINIMUM sampling frequency fs (in Hz) required to prevent spectral aliasing for an analog signal with fmax = {fmax} Hz? Enter the exact integer value.`,
+            parameterRanges: { fmax: [2500, 3200, 4000, 4800, 5000, 6000, 7500, 8000] },
+            formula: "2 * fmax",
+            explanationTemplate: `The Nyquist rate is calculated as fs = 2 * fmax = 2 * {fmax} = {answer} Hz. Any lower rate causes spectral folding/aliasing.`,
+          },
         },
         ...(stageCount > 1
           ? [
@@ -444,6 +482,10 @@ function generateCourseAlignedTemplate(options: GenerateQuestOptions): Generated
                 ],
                 correctOptionId: "opt_anti_aliasing",
                 unlockedBreadcrumbText: "Filter specifications validated. Final telemetry decoded.",
+                variantTemplate: {
+                  type: "MULTIPLE_CHOICE_SHUFFLE" as const,
+                  templateKey: "MC_SHUFFLE",
+                },
               },
             ]
           : []),
@@ -480,6 +522,14 @@ function generateCourseAlignedTemplate(options: GenerateQuestOptions): Generated
           hintText: "Multiply the two prime numbers: n = p * q.",
           explanation: `The modulus is n = ${p} * ${q} = ${n}.`,
           unlockedBreadcrumbText: "Modulus n established. Proceeding to totient calculation.",
+          variantTemplate: {
+            type: "NUMERIC_PARAMETRIC" as const,
+            templateKey: "RSA_MODULUS",
+            templateText: `An RSA key pair uses two prime numbers p = {p} and q = {q}. What is the public modulus n = p * q?`,
+            parameterRanges: { primePairIndex: [0, 1, 2, 3, 4, 5] },
+            formula: "p * q",
+            explanationTemplate: `The modulus is n = {p} * {q} = {answer}.`,
+          },
         },
         ...(stageCount > 1
           ? [
@@ -491,9 +541,17 @@ function generateCourseAlignedTemplate(options: GenerateQuestOptions): Generated
                 expectedAnswer: String(phi),
                 acceptableAnswers: [String(phi)],
                 numericTolerance: 0,
-                hintText: "Calculate (${p} - 1) * (${q} - 1).",
+                hintText: `Calculate (${p} - 1) * (${q} - 1).`,
                 explanation: `phi(n) = (${p} - 1) * (${q} - 1) = ${p - 1} * ${q - 1} = ${phi}.`,
                 unlockedBreadcrumbText: "Totient verified. Public key exponent authorized.",
+                variantTemplate: {
+                  type: "NUMERIC_PARAMETRIC" as const,
+                  templateKey: "RSA_TOTIENT",
+                  templateText: `Using Euler's totient function phi(n) = (p - 1) * (q - 1), calculate the totient value for p = {p} and q = {q}.`,
+                  parameterRanges: { primePairIndex: [0, 1, 2, 3, 4, 5] },
+                  formula: "(p - 1) * (q - 1)",
+                  explanationTemplate: `phi(n) = ({p} - 1) * ({q} - 1) = {answer}.`,
+                },
               },
             ]
           : []),
@@ -529,6 +587,14 @@ function generateCourseAlignedTemplate(options: GenerateQuestOptions): Generated
           hintText: `Compute remainder of ${key} divided by ${tableSize}: ${key} % ${tableSize}.`,
           explanation: `19 mod 7 = 5 because 7 * 2 = 14, remainder = 5. So initial slot is index ${initialIndex}.`,
           unlockedBreadcrumbText: "Primary slot verified. Probing algorithm unlocked.",
+          variantTemplate: {
+            type: "NUMERIC_PARAMETRIC" as const,
+            templateKey: "HASH_DIVISION",
+            templateText: `For a hash table of capacity m = 7 and key k = {key}, what is the initial hash index computed by h(k) = k mod 7? Enter the single digit index.`,
+            parameterRanges: { key: [17, 19, 23, 25, 26, 29, 31, 33, 37, 41, 43] },
+            formula: "key % 7",
+            explanationTemplate: `The primary hash slot is h({key}) = {key} mod 7 = {answer}.`,
+          },
         },
         ...(stageCount > 1
           ? [
@@ -543,6 +609,14 @@ function generateCourseAlignedTemplate(options: GenerateQuestOptions): Generated
                 hintText: `Compute (${initialIndex} + 1) mod ${tableSize}.`,
                 explanation: `Linear probing steps to the next contiguous slot: (${initialIndex} + 1) mod 7 = ${(initialIndex + 1) % tableSize}.`,
                 unlockedBreadcrumbText: "Collision resolved. Hash table insertion complete.",
+                variantTemplate: {
+                  type: "NUMERIC_PARAMETRIC" as const,
+                  templateKey: "HASH_PROBING",
+                  templateText: `If slot index {initialIndex} is already occupied by an earlier entry, which index does linear probing h'(k, i) = (h(k) + i) mod 7 test on the FIRST collision step (i = 1)?`,
+                  parameterRanges: { key: [17, 19, 23, 25, 26, 29, 31, 33, 37, 41, 43] },
+                  formula: "(key % 7 + 1) % 7",
+                  explanationTemplate: `Linear probing steps to the next contiguous slot: ({initialIndex} + 1) mod 7 = {answer}.`,
+                },
               },
             ]
           : []),

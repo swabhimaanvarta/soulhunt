@@ -21,8 +21,14 @@ const CourseCurriculumSchema = z.object({
   modules: z.array(ModuleSchema).min(1),
   approvedLocationIds: z.array(z.string()).optional(),
   isActive: z.boolean().optional(),
+  isFacultyApproved: z.boolean().optional(),
+  approvalNotes: z.string().optional(),
 });
 
+/**
+ * GET /api/admin/courses
+ * Strictly idempotent, read-only query. Never mutates the database.
+ */
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
@@ -35,13 +41,57 @@ export async function GET(req: NextRequest) {
 
     await connectDB();
 
-    let courses = await CourseCurriculum.find({ isActive: true })
+    const approvedOnly = req.nextUrl.searchParams.get("approvedOnly") === "true";
+    const query: any = { isActive: true };
+    if (approvedOnly) {
+      query.isFacultyApproved = true;
+    }
+
+    const courses = await CourseCurriculum.find(query)
       .populate("approvedLocationIds", "name code isSafeDesk")
+      .populate("approvedBy", "displayName email username")
       .sort({ department: 1, semester: 1, courseCode: 1 })
       .lean();
 
-    // If no course curricula exist yet, seed high-quality baseline curricula for the pilot
-    if (courses.length === 0) {
+    return NextResponse.json({
+      success: true,
+      data: courses,
+      total: courses.length,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to load course curriculums." },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/admin/courses
+ * Create/update course curriculum, or explicitly seed example curricula in unapproved draft status.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || user.role !== "ADMIN") {
+      return NextResponse.json(
+        { success: false, error: "Only Administrators can create or update course curricula." },
+        { status: 403 }
+      );
+    }
+
+    await connectDB();
+
+    const action = req.nextUrl.searchParams.get("action");
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Body may be empty if invoking action via query param
+    }
+
+    // Explicit example seeding action: strictly marks curricula as isExample: true and isFacultyApproved: false
+    if (action === "seed-examples" || body.action === "seed-examples") {
       const locations = await CampusLocation.find().lean();
       const compLoc = locations.find((l) => l.code === "COMP-AI") || locations[0];
       const libLoc = locations.find((l) => l.code === "LIB-CENTRAL") || locations[0];
@@ -82,6 +132,9 @@ export async function GET(req: NextRequest) {
           approvedLocationIds: compLoc ? [compLoc._id, libLoc._id] : [],
           version: 1,
           isActive: true,
+          isExample: true,
+          isFacultyApproved: false,
+          approvalNotes: "Demo curriculum template. Requires explicit faculty confirmation before student quest generation.",
         },
         {
           courseCode: "EC302",
@@ -99,68 +152,60 @@ export async function GET(req: NextRequest) {
                 "Identify anti-aliasing filter cutoff requirements",
               ],
               approvedSyllabusText:
-                "Nyquist-Shannon Sampling Theorem: to prevent aliasing, the sampling frequency fs must satisfy fs >= 2 * fmax, where fmax is the maximum frequency component. The minimum required sampling rate fs = 2 * fmax is termed the Nyquist rate. For an N-point DFT sampled at fs, the frequency spacing between bins is delta_f = fs / N.",
+                "Nyquist-Shannon sampling theorem states that a continuous-time band-limited signal with maximum frequency component fmax can be uniquely reconstructed from its samples if the sampling frequency satisfies fs >= 2 * fmax. Sampling at fs < 2 * fmax introduces irreversible spectral folding called aliasing. Anti-aliasing analog low-pass filter must precede the analog-to-digital converter.",
             },
           ],
           approvedLocationIds: compLoc ? [compLoc._id] : [],
           version: 1,
           isActive: true,
+          isExample: true,
+          isFacultyApproved: false,
+          approvalNotes: "Demo curriculum template. Requires explicit faculty confirmation before student quest generation.",
         },
         {
           courseCode: "MA102",
           courseName: "Discrete Mathematics & Applied Cryptography",
-          department: "Applied Sciences & Humanities",
+          department: "Mathematics & Basic Sciences",
           semester: 2,
           modules: [
             {
               moduleNumber: 1,
-              title: "Modular Arithmetic & RSA Key Cryptography",
-              topics: ["Euclidean Algorithm", "Modular Multiplicative Inverse", "RSA Key Generation"],
+              title: "Modular Arithmetic & Public Key Cryptography",
+              topics: ["Euler Totient", "Modular Inverse", "RSA Algorithm", "Fermat Little Theorem"],
               learningOutcomes: [
-                "Compute greatest common divisor using Euclidean algorithm",
-                "Calculate Euler totient function phi(n) = (p-1)*(q-1)",
-                "Verify RSA public and private key exponents",
+                "Compute Euler totient phi(n) for composite modulus n = p * q",
+                "Verify coprime conditions using Euclidean algorithm",
+                "Derive RSA public/private key exponents",
               ],
               approvedSyllabusText:
-                "Euclidean Algorithm: gcd(a, b) = gcd(b, a mod b) until remainder is zero. In RSA cryptography: select two distinct primes p and q. Modulus n = p * q. Euler totient phi(n) = (p - 1) * (q - 1). Public exponent e is chosen coprime to phi(n). Private exponent d is the modular multiplicative inverse of e mod phi(n): (d * e) mod phi(n) = 1.",
+                "Euler totient function phi(n) calculates the number of positive integers up to n that are relatively prime to n. For distinct primes p and q, phi(p*q) = (p - 1) * (q - 1). In the RSA cryptosystem, public modulus is n = p * q, and the public exponent e satisfies gcd(e, phi(n)) = 1. The private exponent d satisfies (d * e) mod phi(n) = 1.",
             },
           ],
-          approvedLocationIds: adminLoc ? [adminLoc._id, libLoc._id] : [],
+          approvedLocationIds: libLoc && adminLoc ? [libLoc._id, adminLoc._id] : [],
           version: 1,
           isActive: true,
+          isExample: true,
+          isFacultyApproved: false,
+          approvalNotes: "Demo curriculum template. Requires explicit faculty confirmation before student quest generation.",
         },
       ];
 
-      await CourseCurriculum.insertMany(defaultCurricula);
-      courses = await CourseCurriculum.find({ isActive: true })
-        .populate("approvedLocationIds", "name code isSafeDesk")
-        .sort({ department: 1, semester: 1, courseCode: 1 })
-        .lean();
+      const inserted = [];
+      for (const cur of defaultCurricula) {
+        const exist = await CourseCurriculum.findOne({ courseCode: cur.courseCode });
+        if (!exist) {
+          const doc = await CourseCurriculum.create(cur);
+          inserted.push(doc);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Seeded ${inserted.length} example curricula in unapproved draft status. Faculty review required.`,
+        data: inserted,
+      });
     }
 
-    return NextResponse.json({
-      success: true,
-      data: courses,
-    });
-  } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || "Failed to fetch course curricula." },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    const user = await getCurrentUser();
-    if (!user || user.role !== "ADMIN") {
-      return NextResponse.json(
-        { success: false, error: "Only Administrators can create or update course curricula." },
-        { status: 403 }
-      );
-    }
-
-    const body = await req.json();
     const parsed = CourseCurriculumSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -173,8 +218,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await connectDB();
     const data = parsed.data;
+    const isApproved = Boolean(data.isFacultyApproved);
 
     const existing = await CourseCurriculum.findOne({ courseCode: data.courseCode.toUpperCase() });
     if (existing) {
@@ -187,6 +232,14 @@ export async function POST(req: NextRequest) {
       }
       if (typeof data.isActive === "boolean") {
         existing.isActive = data.isActive;
+      }
+      if (typeof data.isFacultyApproved === "boolean") {
+        existing.isFacultyApproved = data.isFacultyApproved;
+        if (data.isFacultyApproved) {
+          existing.approvedBy = user._id;
+          existing.approvedAt = new Date();
+          existing.approvalNotes = data.approvalNotes || "Approved by faculty administrator.";
+        }
       }
       existing.version += 1;
       existing.ownerId = user._id;
@@ -209,6 +262,11 @@ export async function POST(req: NextRequest) {
       ownerId: user._id,
       version: 1,
       isActive: data.isActive ?? true,
+      isExample: false,
+      isFacultyApproved: isApproved,
+      approvedBy: isApproved ? user._id : null,
+      approvedAt: isApproved ? new Date() : null,
+      approvalNotes: isApproved ? data.approvalNotes || "Approved upon curriculum creation." : "",
     });
 
     return NextResponse.json(
@@ -227,3 +285,55 @@ export async function POST(req: NextRequest) {
   }
 }
 
+/**
+ * PATCH /api/admin/courses
+ * Deliberate faculty approval or revocation of course curricula.
+ */
+export async function PATCH(req: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user || user.role !== "ADMIN") {
+      return NextResponse.json(
+        { success: false, error: "Only Faculty Administrators can approve course curricula." },
+        { status: 403 }
+      );
+    }
+
+    await connectDB();
+    const body = await req.json();
+    const { courseId, isFacultyApproved, notes } = body;
+
+    if (!courseId || !Types.ObjectId.isValid(courseId)) {
+      return NextResponse.json(
+        { success: false, error: "Valid courseId is required for curriculum approval." },
+        { status: 400 }
+      );
+    }
+
+    const course = await CourseCurriculum.findById(courseId);
+    if (!course) {
+      return NextResponse.json(
+        { success: false, error: "Course curriculum not found." },
+        { status: 404 }
+      );
+    }
+
+    const approve = Boolean(isFacultyApproved);
+    course.isFacultyApproved = approve;
+    course.approvedBy = approve ? user._id : null;
+    course.approvedAt = approve ? new Date() : null;
+    course.approvalNotes = notes || (approve ? `Faculty approved by ${user.displayName || user.username}` : "Approval revoked");
+    await course.save();
+
+    return NextResponse.json({
+      success: true,
+      message: `Course ${course.courseCode} ${approve ? "approved for academic quest generation" : "unapproved"}.`,
+      data: course,
+    });
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to update curriculum approval status." },
+      { status: 500 }
+    );
+  }
+}

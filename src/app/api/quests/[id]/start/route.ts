@@ -72,7 +72,11 @@ export async function POST(
       .sort({ stageOrder: 1 })
       .lean();
 
-    const stageVariants = createPlayerClueVariants(clues, user._id);
+    const stageVariants = createPlayerClueVariants(clues, {
+      userId: user._id,
+      squadId: user.squadId,
+      isSquadInvestigation,
+    });
 
     const investigation = await Investigation.create({
       questId: quest._id,

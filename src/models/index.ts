@@ -757,9 +757,12 @@ export interface IClue extends Document {
   options?: Array<{ id: string; text: string }>;
   correctOptionId?: string;
   variantTemplate?: {
-    parameterRanges?: Record<string, [number, number]>;
+    type?: "NUMERIC_PARAMETRIC" | "MULTIPLE_CHOICE_SHUFFLE" | "NONE";
+    templateKey?: string;
+    parameterRanges?: Record<string, [number, number] | number[]>;
     formula?: string;
     templateText?: string;
+    explanationTemplate?: string;
   };
   targetLocationId?: Types.ObjectId | null;
   hintText: string;
@@ -797,9 +800,12 @@ const ClueSchema = new Schema<IClue>(
     ],
     correctOptionId: { type: String, select: false, default: "" },
     variantTemplate: {
+      type: { type: String, enum: ["NUMERIC_PARAMETRIC", "MULTIPLE_CHOICE_SHUFFLE", "NONE"], default: "NONE" },
+      templateKey: { type: String, default: "" },
       parameterRanges: { type: Schema.Types.Mixed, default: null },
       formula: { type: String, default: "" },
       templateText: { type: String, default: "" },
+      explanationTemplate: { type: String, default: "" },
     },
     targetLocationId: {
       type: Schema.Types.ObjectId,
@@ -850,6 +856,8 @@ export interface IInvestigation extends Document {
     clueId: Types.ObjectId;
     customClueText: string;
     customExpectedAnswer: string;
+    acceptableAnswers?: string[];
+    numericTolerance?: number;
     options?: Array<{ id: string; text: string }>;
     explanation?: string;
   }[];
@@ -872,6 +880,8 @@ const InvestigationSchema = new Schema<IInvestigation>(
         clueId: { type: Schema.Types.ObjectId, ref: "Clue", required: true },
         customClueText: { type: String, required: true },
         customExpectedAnswer: { type: String, required: true, select: false },
+        acceptableAnswers: { type: [String], default: [] },
+        numericTolerance: { type: Number, default: 0 },
         options: [
           {
             id: { type: String, required: true },
@@ -1611,6 +1621,11 @@ export interface ICourseCurriculum extends Document {
   ownerId?: Types.ObjectId | null;
   version: number;
   isActive: boolean;
+  isExample: boolean;
+  isFacultyApproved: boolean;
+  approvedBy?: Types.ObjectId | null;
+  approvedAt?: Date | null;
+  approvalNotes?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -1634,6 +1649,11 @@ const CourseCurriculumSchema = new Schema<ICourseCurriculum>(
     ownerId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     version: { type: Number, default: 1 },
     isActive: { type: Boolean, default: true, index: true },
+    isExample: { type: Boolean, default: false },
+    isFacultyApproved: { type: Boolean, default: false, index: true },
+    approvedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    approvedAt: { type: Date, default: null },
+    approvalNotes: { type: String, default: "" },
   },
   { timestamps: true }
 );

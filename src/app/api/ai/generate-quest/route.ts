@@ -5,6 +5,11 @@ import { createAIGameMasterQuest } from "@/lib/ai/gameMaster";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 const GenerateQuestRequestSchema = z.object({
+  courseId: z.string().min(1, "courseId is strictly required to anchor quest synthesis in an approved curriculum."),
+  moduleNumber: z.coerce.number().int().min(1).optional(),
+  moduleId: z.string().optional(),
+  topic: z.string().max(150).optional(),
+  learningOutcome: z.string().max(250).optional(),
   prompt: z.string().max(1000).optional(),
   theme: z.string().max(100).optional(),
   difficulty: z.coerce.number().int().min(1).max(5).optional(),
@@ -19,14 +24,6 @@ const GenerateQuestRequestSchema = z.object({
   ]).optional(),
   locationCode: z.string().max(20).optional(),
   stageCount: z.coerce.number().int().min(1).max(6).optional(),
-  courseId: z.string().optional(),
-  courseCode: z.string().max(20).optional(),
-  courseName: z.string().max(100).optional(),
-  semester: z.coerce.number().int().min(1).max(8).optional(),
-  moduleTitle: z.string().max(150).optional(),
-  topic: z.string().max(150).optional(),
-  learningOutcome: z.string().max(250).optional(),
-  approvedSyllabusText: z.string().max(4000).optional(),
   expectedDurationMinutes: z.coerce.number().int().min(5).max(120).optional(),
   preferredProvider: z.enum(["GEMINI", "OPENAI", "TEMPLATE", "AUTO"]).optional(),
 });
@@ -57,7 +54,10 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch {
-      // Allow default generation
+      return NextResponse.json(
+        { success: false, error: "Valid JSON request body is required." },
+        { status: 400 }
+      );
     }
 
     const parsed = GenerateQuestRequestSchema.safeParse(body);
@@ -77,20 +77,17 @@ export async function POST(req: NextRequest) {
     // Hard constraint: EVERY AI quest generation MUST be saved as a DRAFT.
     // Direct auto-publishing via makePublic is intentionally disbarred; publication requires deliberate staff review.
     const result = await createAIGameMasterQuest({
+      courseId: input.courseId,
+      moduleNumber: input.moduleNumber,
+      moduleId: input.moduleId,
+      topic: input.topic,
+      learningOutcome: input.learningOutcome,
       prompt: input.prompt,
       theme: input.theme,
       difficulty: input.difficulty,
       questType: input.questType,
       locationCode: input.locationCode,
       stageCount: input.stageCount,
-      courseId: input.courseId,
-      courseCode: input.courseCode,
-      courseName: input.courseName,
-      semester: input.semester,
-      moduleTitle: input.moduleTitle,
-      topic: input.topic,
-      learningOutcome: input.learningOutcome,
-      approvedSyllabusText: input.approvedSyllabusText,
       expectedDurationMinutes: input.expectedDurationMinutes,
       preferredProvider: input.preferredProvider,
     });
@@ -98,14 +95,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: true,
-        message: `Course-aligned quest drafted successfully via ${result.source}! Review clue stages and safety rationale before publishing.`,
-        data: result,
+        message: `Quest draft synthesized successfully under course ${result.quest.courseCode || "Curriculum"}! Saved as DRAFT for faculty review.`,
+        data: {
+          quest: result.quest,
+          clues: result.clues,
+          source: result.source,
+          modelName: result.modelName,
+          safetyCheck: result.safetyCheck,
+          fallbackTriggered: result.fallbackTriggered,
+          fallbackReason: result.fallbackReason,
+        },
       },
       { status: 201 }
     );
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error.message || "Failed to generate AI quest." },
+      { success: false, error: error.message || "Quest generation failed." },
       { status: 500 }
     );
   }

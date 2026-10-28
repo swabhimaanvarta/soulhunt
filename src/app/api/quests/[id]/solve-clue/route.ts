@@ -104,34 +104,66 @@ export async function POST(
       );
     }
 
-    let expectedNormalized = clue.expectedAnswerNormalized;
-    let acceptableList = clue.acceptableAnswers || [];
-    let tolerance = clue.numericTolerance || 0;
-    let explanationText = clue.explanation || clue.unlockedBreadcrumbText;
-
     const playerVariant = investigation.stageVariants?.find(
       (v: any) => v.stageOrder === stageOrder
     );
 
-    if (playerVariant?.customExpectedAnswer) {
-      expectedNormalized = playerVariant.customExpectedAnswer;
+    let isCorrect = false;
+    let explanationText = clue.explanation || clue.unlockedBreadcrumbText;
+    const normalizedInput = normalizeClueAnswer(submittedAnswer);
+
+    if (playerVariant && playerVariant.customExpectedAnswer) {
+      // 1. Personalized / Squad Variant Evaluation:
+      // Grade STRICTLY against this variant's custom expected answer and variant-specific acceptable answers.
+      // NEVER fall back to the clue's shared acceptableAnswers or base expectedAnswer to prevent answer copying.
+      const expectedNormalized = playerVariant.customExpectedAnswer;
       if (playerVariant.explanation) {
         explanationText = playerVariant.explanation;
       }
-    }
 
-    const normalizedInput = normalizeClueAnswer(submittedAnswer);
-    let isCorrect = normalizedInput === normalizeClueAnswer(expectedNormalized);
+      isCorrect = normalizedInput === normalizeClueAnswer(expectedNormalized);
 
-    if (!isCorrect && Array.isArray(acceptableList) && acceptableList.length > 0) {
-      isCorrect = acceptableList.some((acc: string) => normalizeClueAnswer(acc) === normalizedInput);
-    }
+      const variantAcceptables = Array.isArray((playerVariant as any).acceptableAnswers)
+        ? (playerVariant as any).acceptableAnswers
+        : [];
+      if (!isCorrect && variantAcceptables.length > 0) {
+        isCorrect = variantAcceptables.some(
+          (acc: string) => normalizeClueAnswer(acc) === normalizedInput
+        );
+      }
 
-    if (!isCorrect && tolerance > 0) {
-      const numSubmitted = parseFloat(submittedAnswer);
-      const numExpected = parseFloat(expectedNormalized);
-      if (!isNaN(numSubmitted) && !isNaN(numExpected)) {
-        isCorrect = Math.abs(numSubmitted - numExpected) <= tolerance;
+      const variantTolerance =
+        typeof (playerVariant as any).numericTolerance === "number"
+          ? (playerVariant as any).numericTolerance
+          : clue.numericTolerance || 0;
+
+      if (!isCorrect && variantTolerance > 0) {
+        const numSubmitted = parseFloat(submittedAnswer);
+        const numExpected = parseFloat(expectedNormalized);
+        if (!isNaN(numSubmitted) && !isNaN(numExpected)) {
+          isCorrect = Math.abs(numSubmitted - numExpected) <= variantTolerance;
+        }
+      }
+    } else {
+      // 2. Base Clue Evaluation (when no personalized variant exists):
+      const expectedNormalized = clue.expectedAnswerNormalized;
+      const acceptableList = clue.acceptableAnswers || [];
+      const tolerance = clue.numericTolerance || 0;
+
+      isCorrect = normalizedInput === normalizeClueAnswer(expectedNormalized);
+
+      if (!isCorrect && Array.isArray(acceptableList) && acceptableList.length > 0) {
+        isCorrect = acceptableList.some(
+          (acc: string) => normalizeClueAnswer(acc) === normalizedInput
+        );
+      }
+
+      if (!isCorrect && tolerance > 0) {
+        const numSubmitted = parseFloat(submittedAnswer);
+        const numExpected = parseFloat(expectedNormalized);
+        if (!isNaN(numSubmitted) && !isNaN(numExpected)) {
+          isCorrect = Math.abs(numSubmitted - numExpected) <= tolerance;
+        }
       }
     }
 
