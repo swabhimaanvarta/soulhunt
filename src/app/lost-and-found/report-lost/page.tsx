@@ -29,6 +29,8 @@ import {
   Check,
   X,
   FileText,
+  Calendar,
+  Clock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import LiveMatchDrawer from "@/components/lost-and-found/LiveMatchDrawer";
@@ -45,10 +47,10 @@ const CATEGORIES = [
 ];
 
 const STEPS = [
-  { id: 1, title: "Item Identity", subtitle: "Name, category & photo" },
-  { id: 2, title: "Campus Location", subtitle: "Where it was last seen" },
-  { id: 3, title: "Security Challenge", subtitle: "Secret verification question" },
-  { id: 4, title: "Bounty & Review", subtitle: "Quest deployment & summary" },
+  { id: 1, title: "Item Identity", subtitle: "Name, category & safe visuals" },
+  { id: 2, title: "Campus Location", subtitle: "Where & when it was seen" },
+  { id: 3, title: "Ownership Proof", subtitle: "Private evidence & challenge" },
+  { id: 4, title: "Review & Publish", subtitle: "Summary & optional quest" },
 ];
 
 export default function ReportLostItemPage() {
@@ -69,13 +71,15 @@ export default function ReportLostItemPage() {
     photoUrl: "",
     lastKnownLocationId: "",
     spotDetails: "",
+    lostAt: new Date().toISOString().split("T")[0],
+    approximateTimeRange: "UNSPECIFIED",
     publicDescription: "",
     secretIdentifiers: "",
     verificationQuestion: "",
     verificationAnswer: "",
-    rewardOffered: 10,
+    rewardOffered: 0,
     recoveryPreference: "HANDOVER_AT_SAFE_DESK",
-    convertToQuest: true,
+    convertToQuest: false,
   });
 
   useEffect(() => {
@@ -173,12 +177,9 @@ export default function ReportLostItemPage() {
       }
     }
     if (step === 3) {
-      if (!formData.verificationQuestion.trim() || formData.verificationQuestion.trim().length < 5) {
-        setError("Secret verification question must be at least 5 characters long.");
-        return false;
-      }
-      if (!formData.verificationAnswer.trim()) {
-        setError("Please provide the correct verification answer.");
+      // Verification question is optional, but if question is provided, answer should also be provided
+      if (formData.verificationQuestion.trim().length > 0 && !formData.verificationAnswer.trim()) {
+        setError("If you set a verification question, please provide the correct answer as well.");
         return false;
       }
     }
@@ -240,7 +241,7 @@ export default function ReportLostItemPage() {
       toast({
         title: "Lost Report Published",
         description: json.data?.quest
-          ? "Report published & active campus investigation quest initialized!"
+          ? "Report published & campus investigation quest initialized!"
           : "Your lost belonging is registered on the campus directory.",
         variant: "success",
       });
@@ -376,7 +377,7 @@ export default function ReportLostItemPage() {
                 Step 1: Item Identity & Visuals
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Name your belonging and describe its visual characteristics.
+                Name your belonging and describe its general appearance for public discovery.
               </p>
             </div>
 
@@ -436,7 +437,7 @@ export default function ReportLostItemPage() {
                 </div>
               </div>
 
-              {/* Photograph Upload */}
+              {/* Photograph Upload & Privacy Notice */}
               <div className="space-y-2 p-4 rounded-2xl bg-slate-950/70 border border-white/5">
                 <div className="flex items-center justify-between text-xs font-mono">
                   <span className="text-slate-300 flex items-center gap-1.5 font-bold">
@@ -446,9 +447,15 @@ export default function ReportLostItemPage() {
                   {uploadingPhoto && <span className="text-rose-400 animate-pulse">Uploading photo...</span>}
                 </div>
 
-                <p className="text-xs text-slate-400">
-                  Upload an existing photo or model image to assist campus seekers in identification.
-                </p>
+                <div className="p-3 rounded-xl bg-slate-900 border border-white/5 text-[11px] text-slate-400 space-y-1">
+                  <div className="font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Photo Privacy Guidance</span>
+                  </div>
+                  <p>
+                    Do NOT upload photos containing faces, student IDs, phone numbers, addresses, or serial numbers. Uploaded photos are scanned and blurred when necessary.
+                  </p>
+                </div>
 
                 <div className="flex items-center gap-3 pt-1">
                   <label className="cursor-pointer px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono border border-white/10 flex items-center gap-2 transition-all">
@@ -505,7 +512,7 @@ export default function ReportLostItemPage() {
                 <textarea
                   required
                   rows={3}
-                  placeholder="Describe color, scratches, stickers, make, or appearance. Do NOT include your phone number or roll number."
+                  placeholder="Describe color, scratches, stickers, make, or appearance. Do NOT include your phone number, roll number, or serial numbers here."
                   value={formData.publicDescription}
                   onChange={(e) => setFormData({ ...formData, publicDescription: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-rose-400 leading-relaxed transition-colors"
@@ -524,16 +531,16 @@ export default function ReportLostItemPage() {
           </div>
         )}
 
-        {/* STEP 2: Campus Location & Spot */}
+        {/* STEP 2: Campus Location & Approximate Date/Time */}
         {currentStep === 2 && (
           <div className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-6 animate-in fade-in duration-200">
             <div className="border-b border-white/10 pb-4">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-rose-400" />
-                Step 2: Campus Location & Path
+                Step 2: Campus Location & Approximate Time
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Pinpoint where you last had your belonging on campus.
+                Pinpoint where and roughly when you last had your belonging on campus.
               </p>
             </div>
 
@@ -553,6 +560,40 @@ export default function ReportLostItemPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Approximate Date & Time Range */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Approximate Date Lost (Optional Estimate)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.lostAt}
+                    onChange={(e) => setFormData({ ...formData, lostAt: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-rose-400 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Approximate Time Window (Optional)</span>
+                  </label>
+                  <select
+                    value={formData.approximateTimeRange}
+                    onChange={(e) => setFormData({ ...formData, approximateTimeRange: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-rose-400 font-mono"
+                  >
+                    <option value="UNSPECIFIED">Approximate / Unsure</option>
+                    <option value="MORNING">Morning (08:00 AM - 12:00 PM)</option>
+                    <option value="AFTERNOON">Afternoon (12:00 PM - 04:00 PM)</option>
+                    <option value="EVENING">Evening (04:00 PM - 08:00 PM)</option>
+                    <option value="NIGHT">Night (08:00 PM - 12:00 AM)</option>
+                  </select>
+                </div>
               </div>
 
               <div className="space-y-1.5">
@@ -585,73 +626,94 @@ export default function ReportLostItemPage() {
           </div>
         )}
 
-        {/* STEP 3: Secret Proof & Verification Challenge */}
+        {/* STEP 3: Private Ownership Evidence & Optional Challenge */}
         {currentStep === 3 && (
           <div className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-6 animate-in fade-in duration-200">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-4">
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <Lock className="w-4 h-4 text-cyan-400" />
-                  Step 3: Secret Proof & Ownership Challenge
+                  Step 3: Private Ownership Evidence & Optional Challenge
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  Prevents false claims. True owners will match this answer instantly.
+                  Kept strictly confidential. Only authorized reviewers compare this to verify ownership.
                 </p>
               </div>
               <span className="px-2.5 py-1 rounded-full text-[10px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 w-fit">
-                CRYPTOGRAPHICALLY PROTECTED
+                CONFIDENTIAL &amp; ENCRYPTED
               </span>
             </div>
 
-            <div className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono text-slate-300 font-bold">
-                  Secret Verification Question *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. What sticker is affixed inside the battery compartment? What initials are scratched on the back?"
-                  value={formData.verificationQuestion}
-                  onChange={(e) => setFormData({ ...formData, verificationQuestion: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div className="space-y-1.5">
+            <div className="space-y-6">
+              {/* Private Ownership Evidence */}
+              <div className="space-y-2 p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/20">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-mono text-slate-300 font-bold">
-                    Correct Verification Answer * (Stored as one-way Bcrypt hash)
+                  <label className="text-xs font-mono text-cyan-300 font-bold flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-cyan-400" />
+                    <span>Private Ownership Details (Never Shown Publicly)</span>
                   </label>
-                  <span className="text-[10px] text-cyan-400 font-mono">Never stored in plaintext</span>
+                  <span className="text-[10px] font-mono text-slate-400">Reviewer Only</span>
                 </div>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Iron Man sticker or serial 904"
-                  value={formData.verificationAnswer}
-                  onChange={(e) => setFormData({ ...formData, verificationAnswer: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400 font-mono"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono text-slate-300 font-bold">
-                  Private Identifiers (Only visible to authorized Safe-Desk security officers)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Barcode number, IMEI ending in 492, scratch near hinge"
+                <textarea
+                  rows={3}
+                  placeholder="e.g. Scratched initial on the back cover, lockscreen photo description, invoice number, items inside the zipper compartment..."
                   value={formData.secretIdentifiers}
                   onChange={(e) => setFormData({ ...formData, secretIdentifiers: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400 leading-relaxed"
                 />
+                <p className="text-[11px] text-slate-400">
+                  This field is completely hidden from public listings, search results, and map pins. Safe-Desk staff will use this to verify claimant descriptions.
+                </p>
+              </div>
+
+              {/* Optional Verification Question */}
+              <div className="space-y-4 p-4 rounded-2xl bg-slate-950/50 border border-white/5">
+                <div className="space-y-1">
+                  <div className="text-xs font-mono font-bold text-slate-300 flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4 text-cyan-400" />
+                    <span>Optional Secret Verification Question</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    If you prefer, you can set a secret question for a finder to answer. The question prompt is NOT exposed publicly. You may leave this blank if your private evidence above is sufficient.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-400">
+                    Question (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. What sticker is inside the battery lid? What is on the keychain?"
+                    value={formData.verificationQuestion}
+                    onChange={(e) => setFormData({ ...formData, verificationQuestion: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400 font-mono"
+                  />
+                </div>
+
+                {formData.verificationQuestion.trim().length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-mono text-slate-400">
+                        Answer * (Stored as one-way Bcrypt hash)
+                      </label>
+                      <span className="text-[10px] text-cyan-400 font-mono">One-way hash verifier</span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="e.g. Blue dragon sticker"
+                      value={formData.verificationAnswer}
+                      onChange={(e) => setFormData({ ...formData, verificationAnswer: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400 font-mono"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* STEP 4: Quest Bounty & Summary Review */}
+        {/* STEP 4: Bounty, Quest Opt-In & Summary Review */}
         {currentStep === 4 && (
           <div className="space-y-6 animate-in fade-in duration-200">
             {/* Quest Activation & Bounty */}
@@ -659,42 +721,49 @@ export default function ReportLostItemPage() {
               <div className="border-b border-white/10 pb-4">
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-amber-400" />
-                  Step 4: Quest Bounty & Handover Preference
+                  Step 4: Bounty & Handover Preference
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  Deploy to the campus Quest Board to mobilize student hunters and squads.
+                  Choose your return preferences and optional community incentives.
                 </p>
               </div>
 
               <div className="space-y-5">
-                <label className="flex items-start gap-3 p-4 rounded-2xl bg-slate-950/80 border border-white/10 cursor-pointer hover:border-emerald-500/40 transition-all">
-                  <input
-                    type="checkbox"
-                    checked={formData.convertToQuest}
-                    onChange={(e) => setFormData({ ...formData, convertToQuest: e.target.checked })}
-                    className="mt-1 w-4 h-4 rounded text-emerald-500 focus:ring-0 bg-slate-800"
-                  />
+                {/* Handover Preference */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold">
+                    Preferred Handover Protocol
+                  </label>
+                  <select
+                    value={formData.recoveryPreference}
+                    onChange={(e) => setFormData({ ...formData, recoveryPreference: e.target.value as any })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 font-mono"
+                  >
+                    <option value="HANDOVER_AT_SAFE_DESK">
+                      Verified Safe-Desk Handover (Campus Safe-Desk Stations — Recommended)
+                    </option>
+                    <option value="DIRECT_CAMPUS_MEETUP">
+                      Dual 6-Digit PIN Direct Campus Meetup
+                    </option>
+                    <option value="MODERATOR_OFFICE">
+                      Security &amp; Proctor Office Intake
+                    </option>
+                  </select>
+                </div>
+
+                {/* Bounty presets (Default 0) */}
+                <div className="space-y-2 p-4 rounded-2xl bg-slate-950/60 border border-white/5">
                   <div className="space-y-1">
-                    <div className="font-bold text-sm text-white flex items-center gap-2">
-                      <span>Deploy Campus Investigation Quest</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono font-bold">
-                        RECOMMENDED
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Publishes an active case file on the Quest Board. Campus hunters and squads will investigate your route, post clues on the Field Evidence board, and locate your item faster.
+                    <label className="text-xs font-mono text-slate-300 font-bold flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-amber-400" />
+                      <span>Hunter Coin Bounty (Optional Finder Incentive — Default: 0)</span>
+                    </label>
+                    <p className="text-[11px] text-slate-400">
+                      Coins are escrowed and awarded to the finder only upon verified physical handover certification.
                     </p>
                   </div>
-                </label>
 
-                {/* Bounty presets */}
-                <div className="space-y-2">
-                  <label className="text-xs font-mono text-slate-300 font-bold flex items-center gap-1.5">
-                    <Coins className="w-4 h-4 text-amber-400" />
-                    <span>Hunter Coin Bounty (Optional Finder Incentive)</span>
-                  </label>
-
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
                     {[0, 10, 25, 50, 100].map((amt) => (
                       <button
                         key={amt}
@@ -706,39 +775,29 @@ export default function ReportLostItemPage() {
                             : "bg-slate-950 text-slate-400 border-white/5 hover:text-white"
                         }`}
                       >
-                        +{amt} Coins
+                        {amt === 0 ? "No Bounty (0)" : `+${amt} Coins`}
                       </button>
                     ))}
                   </div>
+                </div>
 
+                {/* Quest Opt-In Toggle */}
+                <label className="flex items-start gap-3 p-4 rounded-2xl bg-slate-950/80 border border-white/10 cursor-pointer hover:border-emerald-500/40 transition-all">
                   <input
-                    type="number"
-                    min={0}
-                    max={500}
-                    value={formData.rewardOffered}
-                    onChange={(e) => setFormData({ ...formData, rewardOffered: parseInt(e.target.value) || 0 })}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-amber-400 font-mono"
+                    type="checkbox"
+                    checked={formData.convertToQuest}
+                    onChange={(e) => setFormData({ ...formData, convertToQuest: e.target.checked })}
+                    className="mt-1 w-4 h-4 rounded text-emerald-500 focus:ring-0 bg-slate-800"
                   />
-                </div>
-
-                {/* Handover Preference */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-mono text-slate-300 font-bold">
-                    Preferred Handover Protocol
-                  </label>
-                  <select
-                    value={formData.recoveryPreference}
-                    onChange={(e) => setFormData({ ...formData, recoveryPreference: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 font-mono"
-                  >
-                    <option value="HANDOVER_AT_SAFE_DESK">
-                      Verified Safe-Desk Handover (Main Gate / Library Station)
-                    </option>
-                    <option value="DIRECT_CONTACT_MODERATED">
-                      Dual 6-Digit PIN Direct Campus Meetup
-                    </option>
-                  </select>
-                </div>
+                  <div className="space-y-1">
+                    <div className="font-bold text-sm text-white flex items-center gap-2">
+                      <span>Deploy Campus Investigation Quest (Opt-in)</span>
+                    </div>
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Publishes a collaborative case file on the Quest Board so campus hunters and squads can help look for clues along your route.
+                    </p>
+                  </div>
+                </label>
               </div>
             </div>
 
@@ -752,22 +811,55 @@ export default function ReportLostItemPage() {
                 <span className="text-[10px] font-mono text-emerald-400">Ready to Publish</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="text-slate-500 font-mono">Title:</span>
-                  <div className="text-white font-bold text-sm mt-0.5">{formData.title}</div>
+              {/* Public Information Grid */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+                  Public Listing Details (Visible to seekers)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-900/50 p-3 rounded-xl border border-white/5">
+                  <div>
+                    <span className="text-slate-500 font-mono">Title:</span>
+                    <div className="text-white font-bold text-sm mt-0.5">{formData.title}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-mono">Category:</span>
+                    <div className="text-white font-bold mt-0.5">{selectedCategoryObj.label}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-mono">Last Seen Location:</span>
+                    <div className="text-white font-bold mt-0.5">{selectedLocationObj?.name || "Campus Location"}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-mono">Approximate Date &amp; Time:</span>
+                    <div className="text-slate-300 font-mono mt-0.5">
+                      {formData.lostAt || "Not specified"} ({formData.approximateTimeRange})
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-slate-500 font-mono">Public Description:</span>
+                    <div className="text-slate-300 mt-0.5 text-xs line-clamp-2">{formData.publicDescription}</div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-500 font-mono">Category:</span>
-                  <div className="text-white font-bold mt-0.5">{selectedCategoryObj.label}</div>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-mono">Last Known Location:</span>
-                  <div className="text-white font-bold mt-0.5">{selectedLocationObj?.name || "Campus Location"}</div>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-mono">Finder Bounty:</span>
-                  <div className="text-amber-400 font-bold mt-0.5">+{formData.rewardOffered} Hunter Coins</div>
+              </div>
+
+              {/* Private Security Details */}
+              <div className="space-y-2 pt-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 font-bold flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Confidential Verification Security (Reviewers Only)
+                </span>
+                <div className="bg-cyan-950/20 border border-cyan-500/20 p-3 rounded-xl text-xs space-y-1.5">
+                  <div>
+                    <span className="text-cyan-400/80 font-mono text-[11px]">Private Ownership Evidence:</span>
+                    <div className="text-slate-300 font-mono text-[11px]">
+                      {formData.secretIdentifiers ? "Configured & Protected" : "None provided"}
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-cyan-400/80 font-mono text-[11px]">Encrypted Verification Challenge:</span>
+                    <div className="text-slate-300 font-mono text-[11px]">
+                      {formData.verificationQuestion ? "Configured & One-way Hashed" : "None (Evidence-based review)"}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -780,44 +872,35 @@ export default function ReportLostItemPage() {
             <button
               type="button"
               onClick={prevStep}
-              className="px-5 py-2.5 rounded-xl border border-white/10 hover:bg-slate-800 text-xs font-mono text-slate-300 font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-5 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-slate-300 text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back</span>
+              <ArrowLeft className="w-4 h-4" /> Back
             </button>
           ) : (
-            <Link
-              href="/lost-and-found"
-              className="px-5 py-2.5 rounded-xl text-xs font-mono text-slate-400 hover:text-white"
-            >
-              Cancel
-            </Link>
+            <div />
           )}
 
           {currentStep < 4 ? (
             <button
               type="button"
               onClick={nextStep}
-              className="px-6 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs font-mono transition-all flex items-center gap-1.5 shadow-lg shadow-rose-500/20 cursor-pointer"
+              className="px-6 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-mono font-bold flex items-center gap-2 shadow-lg shadow-rose-500/20 transition-all cursor-pointer"
             >
-              <span>Next Step</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              Next Step <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               type="submit"
               disabled={loading}
-              className="px-7 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-xl shadow-emerald-500/25 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer font-mono"
+              className="px-7 py-3 rounded-xl bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 text-white text-xs font-mono font-bold flex items-center gap-2 shadow-xl shadow-rose-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Publishing Dossier...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Publishing Lost Report...
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Publish Lost Report & Deploy Quest</span>
+                  <Shield className="w-4 h-4" /> Publish Verified Lost Dossier
                 </>
               )}
             </button>

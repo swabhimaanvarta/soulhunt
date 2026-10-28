@@ -1178,37 +1178,26 @@ export default function ItemDetailPage() {
                   <div className="space-y-2.5 p-3.5 sm:p-4 rounded-2xl bg-cyan-950/40 border border-cyan-500/30">
                     <div className="flex items-center gap-2 text-xs font-mono font-bold text-cyan-300">
                       <Lock className="w-4 h-4 text-cyan-400 shrink-0" />
-                      <span>Owner&apos;s Secret Verification Challenge</span>
+                      <span>Encrypted Ownership Verification Check</span>
                     </div>
 
-                    {item.verificationQuestion ? (
-                      <div className="space-y-1 bg-slate-900/90 p-3 rounded-xl border border-cyan-500/20">
-                        <span className="text-[10px] uppercase font-mono text-cyan-400/90 font-bold tracking-wider">
-                          Question to Answer:
-                        </span>
-                        <p className="text-xs text-white font-medium leading-relaxed">
-                          &ldquo;{item.verificationQuestion}&rdquo;
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-slate-300 italic">
-                        This item has an encrypted verification challenge set by the owner.
-                      </p>
-                    )}
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      The owner configured a private verification check. If you know the matching secret detail, enter it below to assist in reviewing your claim.
+                    </p>
 
                     <div className="space-y-1.5 pt-0.5">
                       <label className="text-[11px] font-mono text-slate-300 font-medium">
-                        Your Answer (Optional Instant Match)
+                        Secret Verification Answer (Optional)
                       </label>
                       <input
                         type="text"
-                        placeholder={item.verificationQuestion ? "Enter your answer to the question above..." : "Enter secret answer if known..."}
+                        placeholder="Enter secret answer if known..."
                         value={answerProvided}
                         onChange={(e) => setAnswerProvided(e.target.value)}
                         className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-white/10 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono"
                       />
                       <p className="text-[10px] text-slate-400 leading-normal">
-                        Matches the reporter&apos;s encrypted secret answer hash directly. If correct, your claim is approved instantly. If you don&apos;t know it, leave it blank and describe ownership proof below.
+                        Your answer is checked securely against the owner&apos;s encrypted verifier. All claims undergo review before physical handover authorization. If you do not know it, leave it blank and describe ownership proof below.
                       </p>
                     </div>
                   </div>
@@ -1321,7 +1310,7 @@ export default function ItemDetailPage() {
                     disabled={claimLoading || proofText.trim().length < 5}
                     className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs transition-all font-mono disabled:opacity-50 cursor-pointer shadow-lg shadow-emerald-500/20"
                   >
-                    {claimLoading ? "Submitting..." : "Submit Claim & Request Code"}
+                    {claimLoading ? "Submitting..." : "Submit Claim for Review"}
                   </button>
                 </div>
               </form>

@@ -45,7 +45,7 @@ export async function POST(
       );
     }
 
-    // Rate limit claims: max 10 claim submissions per hour per user
+    // Rate limit claims: max 10 claim submissions per hour per user, max 5 per item
     const rateLimitKey = `claim_${user._id}`;
     const rateLimit = await checkRateLimit(rateLimitKey, 10, 3600);
     if (!rateLimit.allowed) {
@@ -55,6 +55,20 @@ export async function POST(
           error: {
             code: "RATE_LIMITED",
             message: "Too many claim submissions. Please wait before attempting another claim.",
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    const itemClaimRate = await checkRateLimit(`claim_item_${id}_${user._id}`, 5, 3600);
+    if (!itemClaimRate.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "RATE_LIMITED",
+            message: "Too many claim attempts for this specific item. Please wait before trying again.",
           },
         },
         { status: 429 }

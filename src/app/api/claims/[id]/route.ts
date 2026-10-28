@@ -24,7 +24,7 @@ export async function GET(
 
     const claim = await ClaimRequest.findById(id)
       .select("+handoverCode +handoverCodeHash")
-      .populate("claimantId", "displayName username avatarUrl email")
+      .populate("claimantId", "displayName username avatarUrl")
       .populate("counterpartyUserId", "displayName username avatarUrl")
       .populate("reviewedBy", "displayName username")
       .lean();
@@ -201,8 +201,8 @@ export async function DELETE(
       );
     }
 
-    // Transition claim status to REJECTED with note
-    claim.status = "REJECTED";
+    // Transition claim status to WITHDRAWN with note
+    claim.status = "WITHDRAWN";
     claim.notes = (claim.notes ? claim.notes + " | " : "") + "Claim withdrawn by claimant.";
     claim.reviewedAt = new Date();
     await claim.save();
@@ -252,7 +252,7 @@ export async function DELETE(
     return apiSuccess({
       message: "Claim successfully withdrawn.",
       claimId: claim._id,
-      status: "REJECTED",
+      status: "WITHDRAWN",
     });
   } catch (error: any) {
     return apiServerError(error, "CLAIM_CANCEL_FAILED", "Failed to cancel claim.");

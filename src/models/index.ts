@@ -320,11 +320,12 @@ export interface ILostItem extends Document {
   category: ItemCategory;
   publicDescription: string;
   secretIdentifiers: string;
-  verificationQuestion: string;
-  verificationAnswerHash: string;
+  verificationQuestion?: string;
+  verificationAnswerHash?: string;
   lastKnownLocationId: Types.ObjectId;
   spotDetails: string;
   lostAt: Date;
+  approximateTimeRange?: string;
   photos: string[];
   recoveryPreference: "HANDOVER_AT_SAFE_DESK" | "DIRECT_CAMPUS_MEETUP" | "MODERATOR_OFFICE";
   convertToQuest: boolean;
@@ -334,6 +335,7 @@ export interface ILostItem extends Document {
   photoUrl?: string;
   rawPhotoUrl?: string;
   blurredPhotoUrl?: string;
+  idempotencyKey?: string;
   status: ItemLifecycleState;
   stateHistory: {
     state: ItemLifecycleState;
@@ -364,9 +366,9 @@ const LostItemSchema = new Schema<ILostItem>(
       required: true,
     },
     publicDescription: { type: String, required: true },
-    secretIdentifiers: { type: String, required: true, select: false },
-    verificationQuestion: { type: String, required: true },
-    verificationAnswerHash: { type: String, required: true, select: false },
+    secretIdentifiers: { type: String, default: "", select: false },
+    verificationQuestion: { type: String, default: "" },
+    verificationAnswerHash: { type: String, default: "", select: false },
     lastKnownLocationId: {
       type: Schema.Types.ObjectId,
       ref: "CampusLocation",
@@ -374,6 +376,7 @@ const LostItemSchema = new Schema<ILostItem>(
     },
     spotDetails: { type: String, default: "" },
     lostAt: { type: Date, required: true },
+    approximateTimeRange: { type: String, default: "" },
     photos: { type: [String], default: [] },
     photoUrl: { type: String, default: "" },
     rawPhotoUrl: { type: String, default: "", select: false },
@@ -383,8 +386,10 @@ const LostItemSchema = new Schema<ILostItem>(
       enum: ["HANDOVER_AT_SAFE_DESK", "DIRECT_CAMPUS_MEETUP", "MODERATOR_OFFICE"],
       default: "HANDOVER_AT_SAFE_DESK",
     },
-    convertToQuest: { type: Boolean, default: true },
+    rewardOffered: { type: Number, default: 0 },
+    convertToQuest: { type: Boolean, default: false },
     linkedQuestId: { type: Schema.Types.ObjectId, ref: "Quest", default: null },
+    idempotencyKey: { type: String, sparse: true, index: true },
     status: {
       type: String,
       enum: [
@@ -417,6 +422,7 @@ const LostItemSchema = new Schema<ILostItem>(
 );
 LostItemSchema.index({ createdAt: -1, _id: -1 });
 LostItemSchema.index({ category: 1, status: 1, createdAt: -1 });
+LostItemSchema.index({ reporterId: 1, idempotencyKey: 1 }, { sparse: true });
 
 export interface IFoundItem extends Document {
   finderId: Types.ObjectId;
@@ -424,9 +430,11 @@ export interface IFoundItem extends Document {
   title?: string;
   category: ItemCategory;
   publicDescription: string;
+  secretIdentifiers?: string;
   foundLocationId: Types.ObjectId;
   spotDetails: string;
   foundAt: Date;
+  approximateTimeRange?: string;
   rawPhotoUrl: string;
   blurredPhotoUrl: string;
   photoUrl?: string;
@@ -438,6 +446,7 @@ export interface IFoundItem extends Document {
   currentClaimId?: Types.ObjectId | null;
   lockerReceiptCode?: string;
   linkedQuestId?: Types.ObjectId | null;
+  idempotencyKey?: string;
   status: ItemLifecycleState;
   stateHistory: {
     state: ItemLifecycleState;
@@ -469,6 +478,7 @@ const FoundItemSchema = new Schema<IFoundItem>(
       required: true,
     },
     publicDescription: { type: String, required: true },
+    secretIdentifiers: { type: String, default: "", select: false },
     foundLocationId: {
       type: Schema.Types.ObjectId,
       ref: "CampusLocation",
@@ -476,6 +486,7 @@ const FoundItemSchema = new Schema<IFoundItem>(
     },
     spotDetails: { type: String, default: "" },
     foundAt: { type: Date, required: true },
+    approximateTimeRange: { type: String, default: "" },
     rawPhotoUrl: { type: String, default: "", select: false },
     blurredPhotoUrl: { type: String, default: "" },
     photoUrl: { type: String, default: "" },
@@ -503,6 +514,7 @@ const FoundItemSchema = new Schema<IFoundItem>(
     },
     lockerReceiptCode: { type: String, default: "" },
     linkedQuestId: { type: Schema.Types.ObjectId, ref: "Quest", default: null },
+    idempotencyKey: { type: String, sparse: true, index: true },
     status: {
       type: String,
       enum: [
@@ -535,6 +547,7 @@ const FoundItemSchema = new Schema<IFoundItem>(
 );
 FoundItemSchema.index({ createdAt: -1, _id: -1 });
 FoundItemSchema.index({ category: 1, status: 1, createdAt: -1 });
+FoundItemSchema.index({ finderId: 1, idempotencyKey: 1 }, { sparse: true });
 
 export interface IClaimRequest extends Document {
   itemType: "LOST" | "FOUND";
@@ -558,7 +571,9 @@ export interface IClaimRequest extends Document {
     | "APPROVED"
     | "HANDOVER_COMPLETE"
     | "REJECTED"
-    | "DISPUTED";
+    | "DISPUTED"
+    | "WITHDRAWN";
+  rejectionReason?: string;
   reviewedBy?: Types.ObjectId | null;
   reviewedAt?: Date | null;
   createdAt?: Date;
@@ -575,6 +590,7 @@ const ClaimRequestSchema = new Schema<IClaimRequest>(
     answerMatched: { type: Boolean, default: false },
     proofPhotoUrl: { type: String, default: "" },
     notes: { type: String, default: "" },
+    rejectionReason: { type: String, default: "" },
     handoverCode: { type: String, select: false },
     handoverCodeHash: { type: String, select: false },
     handoverCodeExpiresAt: { type: Date },
@@ -589,7 +605,7 @@ const ClaimRequestSchema = new Schema<IClaimRequest>(
     },
     status: {
       type: String,
-      enum: ["PENDING", "APPROVED", "HANDOVER_COMPLETE", "REJECTED", "DISPUTED"],
+      enum: ["PENDING", "APPROVED", "HANDOVER_COMPLETE", "REJECTED", "DISPUTED", "WITHDRAWN"],
       default: "PENDING",
     },
     reviewedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },

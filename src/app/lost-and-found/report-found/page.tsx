@@ -29,6 +29,9 @@ import {
   X,
   FileText,
   Award,
+  Calendar,
+  Clock,
+  UserCheck,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import LiveMatchDrawer from "@/components/lost-and-found/LiveMatchDrawer";
@@ -45,9 +48,9 @@ const CATEGORIES = [
 ];
 
 const STEPS = [
-  { id: 1, title: "Item Found", subtitle: "Name, category & photo" },
-  { id: 2, title: "Location Discovered", subtitle: "Where on campus" },
-  { id: 3, title: "Custody & Deposit", subtitle: "Safe-Desk deposit & rewards" },
+  { id: 1, title: "Item Found", subtitle: "Name, category & safe details" },
+  { id: 2, title: "Location & Photo", subtitle: "Where on campus" },
+  { id: 3, title: "Custody & Verification", subtitle: "Deposit, private detail & review" },
 ];
 
 export default function ReportFoundItemPage() {
@@ -68,7 +71,10 @@ export default function ReportFoundItemPage() {
     category: "ELECTRONICS",
     foundLocationId: "",
     spotDetails: "",
+    foundAt: new Date().toISOString().split("T")[0],
+    approximateTimeRange: "UNSPECIFIED",
     publicDescription: "",
+    secretIdentifiers: "",
     custodyStatus: "SAFE_DESK",
     currentCustodyLocationId: "",
     photoUrl: "",
@@ -90,7 +96,7 @@ export default function ReportFoundItemPage() {
       .then((d) => {
         if (d.success && d.data) {
           setLocations(d.data);
-          const sds = d.data.filter((l: any) => l.isSafeDesk);
+          const sds = d.data.filter((l: any) => l.isSafeDesk && l.isActive !== false);
           setSafeDesks(sds);
 
           if (d.data.length > 0) {
@@ -106,7 +112,7 @@ export default function ReportFoundItemPage() {
             setFormData((prev) => ({
               ...prev,
               foundLocationId: initialFoundId,
-              currentCustodyLocationId: sds[0]?._id || d.data[0]._id,
+              currentCustodyLocationId: sds[0]?._id || "",
             }));
           }
         }
@@ -140,7 +146,7 @@ export default function ReportFoundItemPage() {
       setFormData((prev) => ({ ...prev, photoUrl: json.url }));
       toast({
         title: "Photo Attached",
-        description: "Image processed & securely encrypted in evidence storage.",
+        description: "Image processed & securely registered in evidence storage.",
         variant: "success",
       });
     } catch (err: any) {
@@ -172,6 +178,12 @@ export default function ReportFoundItemPage() {
         return false;
       }
     }
+    if (step === 3) {
+      if (formData.custodyStatus === "SAFE_DESK" && !formData.currentCustodyLocationId) {
+        setError("Please select an authorized Safe-Desk station for deposit.");
+        return false;
+      }
+    }
     return true;
   };
 
@@ -198,7 +210,7 @@ export default function ReportFoundItemPage() {
     e.preventDefault();
     if (loading) return;
 
-    if (!validateStep(1) || !validateStep(2)) {
+    if (!validateStep(1) || !validateStep(2) || !validateStep(3)) {
       return;
     }
 
@@ -227,11 +239,26 @@ export default function ReportFoundItemPage() {
         throw new Error(errorMsg);
       }
 
+      // Context-aware success notification
+      let toastTitle = "Found Report Published";
+      let toastDesc = "Your found report has been registered on the campus network.";
+      if (formData.custodyStatus === "SAFE_DESK") {
+        toastTitle = "Deposit Reported at Safe-Desk";
+        toastDesc = "Report submitted! Awaiting staff physical intake verification at the Safe-Desk station.";
+      } else if (formData.custodyStatus === "FINDER_HELD") {
+        toastTitle = "Found Report Published";
+        toastDesc = "You are holding this item. You will be alerted when an owner files a claim.";
+      } else if (formData.custodyStatus === "ADMIN_OFFICE") {
+        toastTitle = "Office Turn-In Registered";
+        toastDesc = "Handed to department office. Awaiting staff intake confirmation.";
+      }
+
       toast({
-        title: "Found Item Turned In",
-        description: "Deposit logged in Safe-Desk custody ledger! Rewards queued upon intake.",
+        title: toastTitle,
+        description: toastDesc,
         variant: "success",
       });
+
       router.push(`/items/${json.data._id}`);
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred.");
@@ -257,7 +284,7 @@ export default function ReportFoundItemPage() {
           href="/lost-and-found"
           className="inline-flex items-center gap-1.5 text-xs font-mono text-slate-400 hover:text-white transition-colors"
         >
-          <ArrowLeft className="w-3.5 h-3.5" /> Back to Lost & Found Directory
+          <ArrowLeft className="w-3.5 h-3.5" /> Back to Lost &amp; Found Directory
         </Link>
       </div>
 
@@ -265,13 +292,13 @@ export default function ReportFoundItemPage() {
       <div className="space-y-2 border-b border-white/10 pb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-xs font-semibold">
           <Shield className="w-3.5 h-3.5 text-emerald-400" />
-          ETHICAL FINDER RECOVERY DESK
+          OFFICIAL CAMPUS FOUND ITEM TURN-IN
         </div>
         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">
-          Turn in a Found Belonging
+          Turn In a Found Belonging
         </h1>
         <p className="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
-          Thank you for keeping AIEM honest. Report belongings discovered across campus. Safe-Desk handovers earn immediate XP, Hunter Coins, and Trust tier boosts.
+          Report an item you found on campus. Your contact details remain confidential. Unique identifying marks are omitted from public cards to prevent fraudulent claims.
         </p>
       </div>
 
@@ -280,7 +307,7 @@ export default function ReportFoundItemPage() {
           <div className="flex items-center gap-2.5 text-amber-300">
             <Shield className="w-4 h-4 shrink-0 text-amber-400" />
             <span>
-              You are currently browsing as a guest. <strong>Sign in</strong> so your turn-in report is registered to your hunter profile and coin rewards are deposited to your wallet.
+              You are currently browsing as a guest. <strong>Sign in</strong> with your college account to receive recovery credit, badges, and trust points when the item is recovered.
             </span>
           </div>
           <Link
@@ -292,33 +319,9 @@ export default function ReportFoundItemPage() {
         </div>
       )}
 
-      {/* Ethical Bounty Banner */}
-      <div className="rounded-3xl bg-gradient-to-r from-emerald-500/15 via-cyan-500/10 to-transparent border border-emerald-500/30 p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
-        <div className="space-y-1">
-          <div className="font-bold text-white text-sm flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-emerald-400" />
-            Ethical Samaritan Payout
-          </div>
-          <p className="text-xs text-slate-400 leading-relaxed max-w-lg">
-            Depositing an item at an authorized campus Safe-Desk counter awards you recovery credit and badges upon staff intake verification.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5 font-mono text-xs shrink-0">
-          <span className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold">
-            ⭐ +80 XP
-          </span>
-          <span className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
-            🪙 +20 Coins
-          </span>
-          <span className="px-3 py-1.5 rounded-xl bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-bold">
-            🛡️ +20 Trust
-          </span>
-        </div>
-      </div>
-
       {/* Structured Stepper Header */}
       <div className="space-y-2">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {STEPS.map((s) => {
             const isCurrent = currentStep === s.id;
             const isCompleted = currentStep > s.id;
@@ -332,7 +335,7 @@ export default function ReportFoundItemPage() {
                     setCurrentStep(s.id);
                   }
                 }}
-                className={`p-3 sm:p-3.5 rounded-2xl border text-left font-mono transition-all cursor-pointer ${
+                className={`p-3 rounded-2xl border text-left font-mono transition-all cursor-pointer ${
                   isCurrent
                     ? "bg-emerald-500/15 border-emerald-500/40 text-white shadow-md shadow-emerald-500/10"
                     : isCompleted
@@ -364,12 +367,13 @@ export default function ReportFoundItemPage() {
         {/* Progress Bar */}
         <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-400 transition-all duration-300"
+            className="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-300"
             style={{ width: `${(currentStep / STEPS.length) * 100}%` }}
           />
         </div>
       </div>
 
+      {/* Main Multi-Step Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
           <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-mono flex items-center gap-2 animate-in fade-in">
@@ -378,28 +382,29 @@ export default function ReportFoundItemPage() {
           </div>
         )}
 
-        {/* STEP 1: Found Item Identity & Photo */}
+        {/* STEP 1: Basic Item Identification */}
         {currentStep === 1 && (
           <div className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-6 animate-in fade-in duration-200">
             <div className="border-b border-white/10 pb-4">
               <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-400" />
-                Step 1: Found Item Details & Photo
+                <Shield className="w-4 h-4 text-emerald-400" />
+                Step 1: Found Item Basics
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Describe the item you discovered to check for active missing reports.
+                Name the item and describe its general appearance so the rightful owner can recognize it.
               </p>
             </div>
 
             <div className="space-y-5">
+              {/* Title & Live Matches */}
               <div className="space-y-1.5">
                 <label className="text-xs font-mono text-slate-300 font-bold">
-                  Item Title / Summary *
+                  Item Title / Name *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Blue Dell Wireless Mouse, Water Bottle, USB Drive, Casio Calculator"
+                  placeholder="e.g. Scientific Calculator, Black Dell Laptop Charger, Silver Metal Key"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 transition-colors"
@@ -413,7 +418,7 @@ export default function ReportFoundItemPage() {
                 />
               </div>
 
-              {/* Category Visual Grid */}
+              {/* Category Grid */}
               <div className="space-y-2">
                 <label className="text-xs font-mono text-slate-300 font-bold">Category *</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
@@ -446,48 +451,142 @@ export default function ReportFoundItemPage() {
                 </div>
               </div>
 
-              {/* Public Description */}
+              {/* Public Description with Anti-Fraud Guidance */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-mono text-slate-300 font-bold">
                     Public Description *
                   </label>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Keep sensitive serial numbers private
+                  <span className="text-[10px] text-amber-400 font-mono flex items-center gap-1">
+                    <Shield className="w-3 h-3" /> Anti-Fraud Safe Guidance
                   </span>
                 </div>
+
+                <div className="p-3 rounded-xl bg-slate-900 border border-white/5 text-[11px] text-slate-400 space-y-1">
+                  <span className="font-semibold text-slate-300">Keep unique secrets private:</span>
+                  <p>
+                    Describe general appearance (color, brand, broad model). <strong>Omit</strong> unique details (exact stickers, keychain charms, serial numbers, wallpaper, wallet contents) so claimants must prove ownership themselves.
+                  </p>
+                </div>
+
                 <textarea
                   required
                   rows={3}
-                  placeholder="Describe general condition, color, and appearance without revealing private ID numbers or owner names."
+                  placeholder="e.g. Found a black Casio calculator with a protective slide cover. Minor scratches on the outer shell."
                   value={formData.publicDescription}
                   onChange={(e) => setFormData({ ...formData, publicDescription: e.target.value })}
                   className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 leading-relaxed transition-colors"
                 />
               </div>
+            </div>
+          </div>
+        )}
 
-              {/* Photo Capture Input */}
+        {/* STEP 2: Location Discovered & Approximate Date/Time */}
+        {currentStep === 2 && (
+          <div className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-6 animate-in fade-in duration-200">
+            <div className="border-b border-white/10 pb-4">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-emerald-400" />
+                Step 2: Campus Location &amp; Photo
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                Where and when was the item discovered?
+              </p>
+            </div>
+
+            <div className="space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-300 font-bold">
+                  Location Found / Campus Sector *
+                </label>
+                <select
+                  value={formData.foundLocationId}
+                  onChange={(e) => setFormData({ ...formData, foundLocationId: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 font-mono"
+                >
+                  {locations.map((loc) => (
+                    <option key={loc._id} value={loc._id}>
+                      {loc.name} ({loc.code}) — {loc.building || "Campus Zone"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Approximate Date & Time Found */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Date Discovered (Approximate)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.foundAt}
+                    onChange={(e) => setFormData({ ...formData, foundAt: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-mono text-slate-300 font-bold flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Approximate Time Window</span>
+                  </label>
+                  <select
+                    value={formData.approximateTimeRange}
+                    onChange={(e) => setFormData({ ...formData, approximateTimeRange: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 font-mono"
+                  >
+                    <option value="UNSPECIFIED">Approximate / Unsure</option>
+                    <option value="MORNING">Morning (08:00 AM - 12:00 PM)</option>
+                    <option value="AFTERNOON">Afternoon (12:00 PM - 04:00 PM)</option>
+                    <option value="EVENING">Evening (04:00 PM - 08:00 PM)</option>
+                    <option value="NIGHT">Night (08:00 PM - 12:00 AM)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-300 font-bold">
+                  Spot Details (Desk, floor, bench)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Second bench from the projector, near power strip, canteen counter"
+                  value={formData.spotDetails}
+                  onChange={(e) => setFormData({ ...formData, spotDetails: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400"
+                />
+              </div>
+
+              {/* Photo Upload with Privacy Notice */}
               <div className="space-y-2 p-4 rounded-2xl bg-slate-950/70 border border-white/5">
                 <div className="flex items-center justify-between text-xs font-mono">
                   <span className="text-slate-300 flex items-center gap-1.5 font-bold">
                     <Camera className="w-4 h-4 text-emerald-400" />
-                    Belonging Photo / Snapshot
+                    Belonging Photo (Optional)
                   </span>
                   {uploadingPhoto && <span className="text-emerald-400 animate-pulse">Uploading photo...</span>}
                 </div>
 
-                <p className="text-xs text-slate-400">
-                  Take a photo of the item. Automatic privacy blur is applied for official identity documents.
-                </p>
+                <div className="p-3 rounded-xl bg-slate-900 border border-white/5 text-[11px] text-slate-400 space-y-1">
+                  <div className="font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Photo Privacy Notice</span>
+                  </div>
+                  <p>
+                    Do not capture personal ID cards, student roll numbers, faces, or readable addresses. Public images are processed and blurred where sensitive.
+                  </p>
+                </div>
 
                 <div className="flex items-center gap-3 pt-1">
                   <label className="cursor-pointer px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono border border-white/10 flex items-center gap-2 transition-all">
                     <Camera className="w-4 h-4 text-emerald-400" />
-                    <span>Snap Photo / Upload</span>
+                    <span>Upload Item Photo</span>
                     <input
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       onChange={handlePhotoUpload}
                       disabled={uploadingPhoto}
                       className="hidden"
@@ -509,7 +608,7 @@ export default function ReportFoundItemPage() {
                   <div className="relative mt-2 rounded-xl overflow-hidden border border-white/10 h-32 max-w-sm bg-black/40">
                     <img
                       src={formData.photoUrl}
-                      alt="Found item"
+                      alt="Found item preview"
                       onError={(e) => {
                         const target = e.currentTarget;
                         if (!target.src.endsWith("/placeholder-item.png")) {
@@ -525,215 +624,197 @@ export default function ReportFoundItemPage() {
           </div>
         )}
 
-        {/* STEP 2: Location Discovered */}
-        {currentStep === 2 && (
-          <div className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-6 animate-in fade-in duration-200">
-            <div className="border-b border-white/10 pb-4">
-              <h2 className="text-base font-bold text-white flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-emerald-400" />
-                Step 2: Campus Location Discovered
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                Where exactly on campus was this item found?
-              </p>
-            </div>
-
-            <div className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono text-slate-300 font-bold">
-                  Campus Location / Sector *
-                </label>
-                <select
-                  value={formData.foundLocationId}
-                  onChange={(e) => setFormData({ ...formData, foundLocationId: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 font-mono"
-                >
-                  {locations.map((loc) => (
-                    <option key={loc._id} value={loc._id}>
-                      {loc.name} ({loc.code}) — {loc.building || "Campus Zone"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-mono text-slate-300 font-bold">
-                  Specific Spot Details
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Left on bench #3 outside Block B micro lab, or 2nd floor library study table"
-                  value={formData.spotDetails}
-                  onChange={(e) => setFormData({ ...formData, spotDetails: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400"
-                />
-              </div>
-
-              {selectedLocationObj && (
-                <div className="p-4 rounded-2xl bg-slate-950/70 border border-white/5 space-y-2 text-xs font-mono">
-                  <div className="text-slate-400 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Sector Details</span>
-                  </div>
-                  <div className="text-white font-bold">{selectedLocationObj.name}</div>
-                  <div className="text-slate-400">{selectedLocationObj.description || "Active campus zone"}</div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3: Custody Status & Safe-Desk Deposit */}
+        {/* STEP 3: Custody Choice & Private Verification Detail */}
         {currentStep === 3 && (
           <div className="space-y-6 animate-in fade-in duration-200">
             <div className="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 space-y-6">
               <div className="border-b border-white/10 pb-4">
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <Building className="w-4 h-4 text-cyan-400" />
-                  Step 3: Custody Status & Safe-Desk Deposit
+                  <Building className="w-4 h-4 text-emerald-400" />
+                  Step 3: Physical Custody &amp; Private Ownership Check
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
-                  Choose how the belonging will be held until claimed by its owner.
+                  Specify who currently holds the physical item and add confidential details to verify future claims.
                 </p>
               </div>
 
               <div className="space-y-5">
-                {/* Visual Custody Cards */}
+                {/* Custody Choices */}
                 <div className="space-y-2">
                   <label className="text-xs font-mono text-slate-300 font-bold">
-                    Custody Option *
+                    Where is the item right now? *
                   </label>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Option 1: Safe-Desk */}
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, custodyStatus: "SAFE_DESK" })}
-                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2 ${
                         formData.custodyStatus === "SAFE_DESK"
-                          ? "bg-emerald-500/20 border-emerald-500/50 text-white shadow-lg shadow-emerald-500/10 ring-1 ring-emerald-400/40"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-white ring-1 ring-emerald-500/40 shadow-lg shadow-emerald-500/10"
                           : "bg-slate-950/70 border-white/5 text-slate-400 hover:text-white"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <Building className={`w-5 h-5 ${formData.custodyStatus === "SAFE_DESK" ? "text-emerald-400" : "text-slate-500"}`} />
-                        <span className="text-[10px] font-mono uppercase bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold">
-                          RECOMMENDED
-                        </span>
+                        <Building className="w-4 h-4 text-emerald-400" />
+                        {formData.custodyStatus === "SAFE_DESK" && <Check className="w-3.5 h-3.5 text-emerald-400" />}
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-white">Deposit at Safe-Desk</div>
-                        <div className="text-[11px] text-slate-400 leading-relaxed mt-1">
-                          Drop off at an authorized campus Safe-Desk counter for secure locker custody and verified return.
+                        <div className="font-bold text-xs text-white">Deposited at Safe-Desk</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                          Handed to verified campus security or library desk. Staff will confirm intake.
                         </div>
                       </div>
                     </button>
 
+                    {/* Option 2: Finder Held */}
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, custodyStatus: "FINDER_HELD" })}
-                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2 ${
                         formData.custodyStatus === "FINDER_HELD"
-                          ? "bg-cyan-500/20 border-cyan-500/50 text-white shadow-lg shadow-cyan-500/10 ring-1 ring-cyan-400/40"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-white ring-1 ring-emerald-500/40 shadow-lg shadow-emerald-500/10"
                           : "bg-slate-950/70 border-white/5 text-slate-400 hover:text-white"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <Key className={`w-5 h-5 ${formData.custodyStatus === "FINDER_HELD" ? "text-cyan-400" : "text-slate-500"}`} />
-                        <span className="text-[10px] font-mono uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">
-                          DIRECT
-                        </span>
+                        <UserCheck className="w-4 h-4 text-cyan-400" />
+                        {formData.custodyStatus === "FINDER_HELD" && <Check className="w-3.5 h-3.5 text-cyan-400" />}
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-white">Finder-Held Custody</div>
-                        <div className="text-[11px] text-slate-400 leading-relaxed mt-1">
-                          You temporarily keep the item. Coordinate a campus meetup via the 6-digit handover PIN.
+                        <div className="font-bold text-xs text-white">Kept by Me (Finder)</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                          You keep the item safely. Coordinate an authorized handover once owner claim is approved.
                         </div>
                       </div>
                     </button>
 
+                    {/* Option 3: Admin / Department Office */}
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, custodyStatus: "ADMIN_OFFICE" })}
-                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between space-y-2 ${
                         formData.custodyStatus === "ADMIN_OFFICE"
-                          ? "bg-amber-500/20 border-amber-500/50 text-white shadow-lg shadow-amber-500/10 ring-1 ring-amber-400/40"
+                          ? "bg-emerald-500/15 border-emerald-500/50 text-white ring-1 ring-emerald-500/40 shadow-lg shadow-emerald-500/10"
                           : "bg-slate-950/70 border-white/5 text-slate-400 hover:text-white"
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <Lock className={`w-5 h-5 ${formData.custodyStatus === "ADMIN_OFFICE" ? "text-amber-400" : "text-slate-500"}`} />
-                        <span className="text-[10px] font-mono uppercase bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full">
-                          DEPT
-                        </span>
+                        <Shield className="w-4 h-4 text-amber-400" />
+                        {formData.custodyStatus === "ADMIN_OFFICE" && <Check className="w-3.5 h-3.5 text-amber-400" />}
                       </div>
                       <div>
-                        <div className="text-xs font-bold text-white">Department Office</div>
-                        <div className="text-[11px] text-slate-400 leading-relaxed mt-1">
-                          Turned in to department head, lab technician, or administrative office staff.
+                        <div className="font-bold text-xs text-white">Department Office</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                          Handed to lab in-charge or proctor office. Awaiting staff intake receipt.
                         </div>
                       </div>
                     </button>
                   </div>
                 </div>
 
+                {/* Safe-Desk Station Selector (Only shown if Safe-Desk selected) */}
                 {formData.custodyStatus === "SAFE_DESK" && (
-                  <div className="space-y-1.5 p-4 rounded-2xl bg-slate-950/80 border border-emerald-500/30">
-                    <label className="text-xs font-mono text-slate-300 font-bold flex items-center gap-1.5">
-                      <Building className="w-4 h-4 text-emerald-400" />
-                      <span>Select Safe-Desk Deposit Counter *</span>
+                  <div className="space-y-2 p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30">
+                    <label className="text-xs font-mono text-emerald-300 font-bold flex items-center gap-1.5">
+                      <Building className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Select Deposit Safe-Desk Station *</span>
                     </label>
                     <select
                       value={formData.currentCustodyLocationId}
                       onChange={(e) => setFormData({ ...formData, currentCustodyLocationId: e.target.value })}
-                      className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-emerald-400 font-mono"
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-emerald-500/30 text-white text-xs font-mono focus:outline-none focus:border-emerald-400"
                     >
-                      {(safeDesks.length > 0 ? safeDesks : locations).map((sd) => (
+                      {safeDesks.map((sd) => (
                         <option key={sd._id} value={sd._id}>
-                          {sd.name} — {sd.building || "Campus Zone"} ({sd.operatingHours || "08:00 AM - 06:00 PM"})
+                          {sd.name} ({sd.operatingHours || "08:00 AM - 06:00 PM"}) — {sd.building || "Campus Station"}
                         </option>
                       ))}
                     </select>
-
-                    {selectedSafeDeskObj && (
-                      <p className="text-[11px] text-emerald-300/80 mt-1">
-                        ✓ Operating hours: {selectedSafeDeskObj.operatingHours || "08:00 AM - 06:00 PM"}. Hand over item to the on-duty Safe-Desk officer.
-                      </p>
-                    )}
+                    <p className="text-[11px] text-slate-400">
+                      The listing will display: <span className="text-amber-300 font-mono">Reported as deposited — awaiting staff intake confirmation</span> until staff verifies physical receipt.
+                    </p>
                   </div>
                 )}
+
+                {/* Private Identifying Detail (Omitted from public) */}
+                <div className="space-y-2 p-4 rounded-2xl bg-slate-950/80 border border-cyan-500/20">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-mono text-cyan-300 font-bold flex items-center gap-1.5">
+                      <Lock className="w-4 h-4 text-cyan-400" />
+                      <span>Private Identifying Detail (For Claim Verification — Never Shown Publicly)</span>
+                    </label>
+                    <span className="text-[10px] font-mono text-slate-400">Reviewers Only</span>
+                  </div>
+                  <textarea
+                    rows={2}
+                    placeholder="e.g. Scratched logo on bottom, specific keychain, wallpaper description, exact contents of pocket, unique mark..."
+                    value={formData.secretIdentifiers}
+                    onChange={(e) => setFormData({ ...formData, secretIdentifiers: e.target.value })}
+                    className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-cyan-400 leading-relaxed"
+                  />
+                  <p className="text-[11px] text-slate-400">
+                    Keep this secret from public descriptions. Authorized staff will use this detail to compare against claimant statements to prevent false claims.
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Final Summary Card */}
+            {/* Dossier Summary Preview Card */}
             <div className="glass-panel rounded-3xl p-6 border border-white/10 bg-slate-950/70 space-y-4">
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
                 <span className="text-xs font-mono uppercase text-slate-400 font-bold flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
+                  <FileText className="w-3.5 h-3.5 text-cyan-400" />
                   Turn-In Summary Preview
                 </span>
-                <span className="text-[10px] font-mono text-emerald-400">Ready to Submit</span>
+                <span className="text-[10px] font-mono text-emerald-400">Ready to Register</span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="text-slate-500 font-mono">Found Item:</span>
-                  <div className="text-white font-bold text-sm mt-0.5">{formData.title}</div>
+              {/* Public Information Grid */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">
+                  Public Listing Details (Visible to seekers)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-slate-900/50 p-3 rounded-xl border border-white/5">
+                  <div>
+                    <span className="text-slate-500 font-mono">Title:</span>
+                    <div className="text-white font-bold text-sm mt-0.5">{formData.title}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-mono">Category:</span>
+                    <div className="text-white font-bold mt-0.5">{selectedCategoryObj.label}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-mono">Location Found:</span>
+                    <div className="text-white font-bold mt-0.5">{selectedLocationObj?.name || "Campus Location"}</div>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 font-mono">Custody Status:</span>
+                    <div className="text-emerald-400 font-bold font-mono mt-0.5">
+                      {formData.custodyStatus === "SAFE_DESK"
+                        ? `Safe-Desk (${selectedSafeDeskObj?.name || "Pending Staff Intake"})`
+                        : formData.custodyStatus === "FINDER_HELD"
+                        ? "Kept by Finder (Campus Handover)"
+                        : "Department Office"}
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-slate-500 font-mono">Public Description:</span>
+                    <div className="text-slate-300 mt-0.5 text-xs line-clamp-2">{formData.publicDescription}</div>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-slate-500 font-mono">Category:</span>
-                  <div className="text-white font-bold mt-0.5">{selectedCategoryObj.label}</div>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-mono">Found Location:</span>
-                  <div className="text-white font-bold mt-0.5">{selectedLocationObj?.name || "Campus Location"}</div>
-                </div>
-                <div>
-                  <span className="text-slate-500 font-mono">Custody Plan:</span>
-                  <div className="text-emerald-400 font-bold mt-0.5">
-                    {formData.custodyStatus === "SAFE_DESK"
-                      ? (selectedSafeDeskObj?.name || "Campus Safe-Desk Station")
-                      : formData.custodyStatus === "FINDER_HELD"
-                      ? "Finder-Held Personal Custody"
-                      : "Department / Admin Office"}
+              </div>
+
+              {/* Private Verification Details */}
+              <div className="space-y-2 pt-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-cyan-400 font-bold flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> Confidential Security Check (Reviewers Only)
+                </span>
+                <div className="bg-cyan-950/20 border border-cyan-500/20 p-3 rounded-xl text-xs space-y-1">
+                  <span className="text-cyan-400/80 font-mono text-[11px]">Private Identifying Detail:</span>
+                  <div className="text-slate-300 font-mono text-[11px]">
+                    {formData.secretIdentifiers ? "Stored confidentially for claim verification" : "None entered"}
                   </div>
                 </div>
               </div>
@@ -747,44 +828,35 @@ export default function ReportFoundItemPage() {
             <button
               type="button"
               onClick={prevStep}
-              className="px-5 py-2.5 rounded-xl border border-white/10 hover:bg-slate-800 text-xs font-mono text-slate-300 font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+              className="px-5 py-2.5 rounded-xl border border-white/10 hover:bg-white/5 text-slate-300 text-xs font-mono font-bold flex items-center gap-2 transition-all cursor-pointer"
             >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Back</span>
+              <ArrowLeft className="w-4 h-4" /> Back
             </button>
           ) : (
-            <Link
-              href="/lost-and-found"
-              className="px-5 py-2.5 rounded-xl text-xs font-mono text-slate-400 hover:text-white"
-            >
-              Cancel
-            </Link>
+            <div />
           )}
 
           {currentStep < 3 ? (
             <button
               type="button"
               onClick={nextStep}
-              className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 cursor-pointer"
+              className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-mono font-bold flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
             >
-              <span>Next Step</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              Next Step <ArrowRight className="w-4 h-4" />
             </button>
           ) : (
             <button
               type="submit"
-              disabled={loading || uploadingPhoto}
-              className="px-7 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-xl shadow-emerald-500/25 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer font-mono"
+              disabled={loading}
+              className="px-7 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 text-xs font-mono font-bold flex items-center gap-2 shadow-xl shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Submitting Turn-In...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" /> Registering Turn-In...
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Submit Found Report & Claim Bounty</span>
+                  <Shield className="w-4 h-4" /> Turn In Found Belonging
                 </>
               )}
             </button>

@@ -245,9 +245,9 @@ async function runLostAndFoundFullProofSuite() {
     const finderAnswer = "blue bird ";
     const isCorrectMatch = await bcrypt.compare(
       finderAnswer.toLowerCase().trim(),
-      loadedLostItem!.verificationAnswerHash
+      loadedLostItem!.verificationAnswerHash!
     );
-    assert(isCorrectMatch, "Cryptographic Check: Cleaned finder answer successfully matches verificationAnswerHash");
+    assert(Boolean(isCorrectMatch), "Cryptographic Check: Cleaned finder answer successfully matches verificationAnswerHash");
 
     const rawHandoverPin = crypto.randomInt(100000, 1000000).toString();
     assert(rawHandoverPin.length === 6, "Cryptographic Randomness: Handover PIN is exactly 6 digits");
