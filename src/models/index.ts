@@ -47,7 +47,9 @@ export type ClueVerificationType =
   | "TEXT_RIDDLE"
   | "LOCATION_CHECKIN"
   | "PASSCODE_QR"
-  | "EVIDENCE_UPLOAD";
+  | "EVIDENCE_UPLOAD"
+  | "NUMERIC_CALCULATION"
+  | "MULTIPLE_CHOICE";
 
 export interface ISystemConfig extends Document {
   key: string;
@@ -645,6 +647,20 @@ export interface IQuest extends Document {
   generationSource?: "AI" | "TEMPLATE" | "ADMIN";
   dailyDate?: string | null;
   theme?: string;
+  courseId?: Types.ObjectId | null;
+  courseCode?: string;
+  courseName?: string;
+  semester?: number;
+  moduleTitle?: string;
+  topic?: string;
+  learningOutcome?: string;
+  expectedDurationMinutes?: number;
+  safetyRationale?: string;
+  reviewerAssumptions?: string;
+  reviewedBy?: Types.ObjectId | null;
+  reviewedAt?: Date | null;
+  aiProvider?: string;
+  aiModel?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -694,6 +710,20 @@ const QuestSchema = new Schema<IQuest>(
     },
     dailyDate: { type: String, default: null, index: true },
     theme: { type: String, default: "" },
+    courseId: { type: Schema.Types.ObjectId, ref: "CourseCurriculum", default: null, index: true },
+    courseCode: { type: String, default: "" },
+    courseName: { type: String, default: "" },
+    semester: { type: Number, default: null },
+    moduleTitle: { type: String, default: "" },
+    topic: { type: String, default: "" },
+    learningOutcome: { type: String, default: "" },
+    expectedDurationMinutes: { type: Number, default: 20 },
+    safetyRationale: { type: String, default: "" },
+    reviewerAssumptions: { type: String, default: "" },
+    reviewedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    reviewedAt: { type: Date, default: null },
+    aiProvider: { type: String, default: "" },
+    aiModel: { type: String, default: "" },
     status: {
       type: String,
       enum: ["ACTIVE", "COMPLETED", "EXPIRED", "DRAFT", "ARCHIVED"],
@@ -721,6 +751,16 @@ export interface IClue extends Document {
   clueText: string;
   verificationType: ClueVerificationType;
   expectedAnswerNormalized: string;
+  acceptableAnswers?: string[];
+  numericTolerance?: number;
+  explanation?: string;
+  options?: Array<{ id: string; text: string }>;
+  correctOptionId?: string;
+  variantTemplate?: {
+    parameterRanges?: Record<string, [number, number]>;
+    formula?: string;
+    templateText?: string;
+  };
   targetLocationId?: Types.ObjectId | null;
   hintText: string;
   hintCoinCost: number;
@@ -735,10 +775,32 @@ const ClueSchema = new Schema<IClue>(
     clueText: { type: String, required: true },
     verificationType: {
       type: String,
-      enum: ["TEXT_RIDDLE", "LOCATION_CHECKIN", "PASSCODE_QR", "EVIDENCE_UPLOAD"],
+      enum: [
+        "TEXT_RIDDLE",
+        "LOCATION_CHECKIN",
+        "PASSCODE_QR",
+        "EVIDENCE_UPLOAD",
+        "NUMERIC_CALCULATION",
+        "MULTIPLE_CHOICE",
+      ],
       required: true,
     },
     expectedAnswerNormalized: { type: String, required: true, select: false },
+    acceptableAnswers: { type: [String], default: [] },
+    numericTolerance: { type: Number, default: 0 },
+    explanation: { type: String, default: "" },
+    options: [
+      {
+        id: { type: String, required: true },
+        text: { type: String, required: true },
+      },
+    ],
+    correctOptionId: { type: String, select: false, default: "" },
+    variantTemplate: {
+      parameterRanges: { type: Schema.Types.Mixed, default: null },
+      formula: { type: String, default: "" },
+      templateText: { type: String, default: "" },
+    },
     targetLocationId: {
       type: Schema.Types.ObjectId,
       ref: "CampusLocation",
@@ -783,6 +845,14 @@ export interface IInvestigation extends Document {
   failedAttemptsCount: number;
   cooldownUntil?: Date | null;
   unlockedHintStages: number[];
+  stageVariants?: {
+    stageOrder: number;
+    clueId: Types.ObjectId;
+    customClueText: string;
+    customExpectedAnswer: string;
+    options?: Array<{ id: string; text: string }>;
+    explanation?: string;
+  }[];
   status: "IN_PROGRESS" | "READY_FOR_RECOVERY" | "SUBMITTED_FOR_VERIFICATION" | "COMPLETED";
 }
 
@@ -796,6 +866,21 @@ const InvestigationSchema = new Schema<IInvestigation>(
     progressPct: { type: Number, default: 0 },
     participatingUserIds: [{ type: Schema.Types.ObjectId, ref: "User" }],
     unlockedHintStages: { type: [Number], default: [] },
+    stageVariants: [
+      {
+        stageOrder: { type: Number, required: true },
+        clueId: { type: Schema.Types.ObjectId, ref: "Clue", required: true },
+        customClueText: { type: String, required: true },
+        customExpectedAnswer: { type: String, required: true, select: false },
+        options: [
+          {
+            id: { type: String, required: true },
+            text: { type: String, required: true },
+          },
+        ],
+        explanation: { type: String, default: "" },
+      },
+    ],
     solvedClues: [
       {
         clueId: { type: Schema.Types.ObjectId, ref: "Clue" },
@@ -1507,5 +1592,56 @@ HandoverMessageSchema.index({ claimId: 1, createdAt: 1 });
 
 export const HandoverMessage: Model<IHandoverMessage> =
   mongoose.models.HandoverMessage || mongoose.model<IHandoverMessage>("HandoverMessage", HandoverMessageSchema);
+
+export interface ICourseModule {
+  moduleNumber: number;
+  title: string;
+  topics: string[];
+  learningOutcomes: string[];
+  approvedSyllabusText: string;
+}
+
+export interface ICourseCurriculum extends Document {
+  courseCode: string;
+  courseName: string;
+  department: string;
+  semester: number;
+  modules: ICourseModule[];
+  approvedLocationIds: Types.ObjectId[];
+  ownerId?: Types.ObjectId | null;
+  version: number;
+  isActive: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const CourseCurriculumSchema = new Schema<ICourseCurriculum>(
+  {
+    courseCode: { type: String, required: true, unique: true, uppercase: true, trim: true },
+    courseName: { type: String, required: true, trim: true },
+    department: { type: String, required: true, trim: true },
+    semester: { type: Number, required: true, min: 1, max: 8 },
+    modules: [
+      {
+        moduleNumber: { type: Number, required: true },
+        title: { type: String, required: true },
+        topics: [{ type: String, required: true }],
+        learningOutcomes: [{ type: String, required: true }],
+        approvedSyllabusText: { type: String, required: true },
+      },
+    ],
+    approvedLocationIds: [{ type: Schema.Types.ObjectId, ref: "CampusLocation" }],
+    ownerId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    version: { type: Number, default: 1 },
+    isActive: { type: Boolean, default: true, index: true },
+  },
+  { timestamps: true }
+);
+
+CourseCurriculumSchema.index({ department: 1, semester: 1 });
+
+export const CourseCurriculum: Model<ICourseCurriculum> =
+  mongoose.models.CourseCurriculum || mongoose.model<ICourseCurriculum>("CourseCurriculum", CourseCurriculumSchema);
+
 
 

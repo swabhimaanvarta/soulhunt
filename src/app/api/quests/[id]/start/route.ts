@@ -3,6 +3,7 @@ import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { Quest, Investigation, Clue } from "@/models";
+import { createPlayerClueVariants } from "@/lib/game/variants";
 
 export async function POST(
   req: NextRequest,
@@ -65,6 +66,14 @@ export async function POST(
       });
     }
 
+    // Fetch quest clues to generate per-player question variants
+    const clues = await Clue.find({ questId: quest._id })
+      .select("+expectedAnswerNormalized +correctOptionId")
+      .sort({ stageOrder: 1 })
+      .lean();
+
+    const stageVariants = createPlayerClueVariants(clues, user._id);
+
     const investigation = await Investigation.create({
       questId: quest._id,
       userId: isSquadInvestigation ? null : user._id,
@@ -73,6 +82,7 @@ export async function POST(
       currentStage: 1,
       progressPct: 0,
       participatingUserIds: [user._id],
+      stageVariants,
       status: "IN_PROGRESS",
       startedAt: new Date(),
     });

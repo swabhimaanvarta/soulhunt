@@ -94,6 +94,30 @@ export async function PUT(
       quest.status = status;
     }
 
+    if (body.topic) quest.topic = body.topic.trim();
+    if (body.learningOutcome) quest.learningOutcome = body.learningOutcome.trim();
+    if (body.safetyRationale) quest.safetyRationale = body.safetyRationale.trim();
+    if (body.reviewerAssumptions) quest.reviewerAssumptions = body.reviewerAssumptions.trim();
+    if (body.expectedDurationMinutes !== undefined) quest.expectedDurationMinutes = Number(body.expectedDurationMinutes);
+
+    if (Array.isArray(body.clues)) {
+      for (const clueUpdate of body.clues) {
+        if (clueUpdate._id) {
+          await Clue.findByIdAndUpdate(clueUpdate._id, {
+            title: clueUpdate.title,
+            clueText: clueUpdate.clueText,
+            verificationType: clueUpdate.verificationType,
+            expectedAnswerNormalized: (clueUpdate.expectedAnswer || clueUpdate.expectedAnswerNormalized || "").toLowerCase().trim(),
+            acceptableAnswers: clueUpdate.acceptableAnswers || [],
+            numericTolerance: clueUpdate.numericTolerance || 0,
+            hintText: clueUpdate.hintText,
+            explanation: clueUpdate.explanation,
+            options: clueUpdate.options || [],
+          });
+        }
+      }
+    }
+
     if (!quest.revisions) quest.revisions = [];
     quest.revisions.push({
       editedBy: user._id,
@@ -166,6 +190,11 @@ export async function PATCH(
 
     const previousStatus = quest.status;
     quest.status = targetStatus;
+
+    if (targetStatus === "ACTIVE") {
+      quest.reviewedBy = user._id;
+      quest.reviewedAt = new Date();
+    }
 
     if (!quest.revisions) quest.revisions = [];
     quest.revisions.push({

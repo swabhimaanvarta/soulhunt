@@ -48,11 +48,11 @@ export async function POST(
     }
 
     const investigation = investigationId
-      ? await Investigation.findById(investigationId)
+      ? await Investigation.findById(investigationId).select("+stageVariants.customExpectedAnswer")
       : await Investigation.findOne({
           questId: quest._id,
           $or: [{ userId: user._id }, { squadId: user.squadId }],
-        });
+        }).select("+stageVariants.customExpectedAnswer");
 
     if (!investigation) {
       return NextResponse.json(
@@ -104,9 +104,36 @@ export async function POST(
       );
     }
 
-    const isCorrect =
-      normalizeClueAnswer(submittedAnswer) ===
-      normalizeClueAnswer(clue.expectedAnswerNormalized);
+    let expectedNormalized = clue.expectedAnswerNormalized;
+    let acceptableList = clue.acceptableAnswers || [];
+    let tolerance = clue.numericTolerance || 0;
+    let explanationText = clue.explanation || clue.unlockedBreadcrumbText;
+
+    const playerVariant = investigation.stageVariants?.find(
+      (v: any) => v.stageOrder === stageOrder
+    );
+
+    if (playerVariant?.customExpectedAnswer) {
+      expectedNormalized = playerVariant.customExpectedAnswer;
+      if (playerVariant.explanation) {
+        explanationText = playerVariant.explanation;
+      }
+    }
+
+    const normalizedInput = normalizeClueAnswer(submittedAnswer);
+    let isCorrect = normalizedInput === normalizeClueAnswer(expectedNormalized);
+
+    if (!isCorrect && Array.isArray(acceptableList) && acceptableList.length > 0) {
+      isCorrect = acceptableList.some((acc: string) => normalizeClueAnswer(acc) === normalizedInput);
+    }
+
+    if (!isCorrect && tolerance > 0) {
+      const numSubmitted = parseFloat(submittedAnswer);
+      const numExpected = parseFloat(expectedNormalized);
+      if (!isNaN(numSubmitted) && !isNaN(numExpected)) {
+        isCorrect = Math.abs(numSubmitted - numExpected) <= tolerance;
+      }
+    }
 
     if (!isCorrect) {
       const config = await SystemConfig.findOne({ key: "GLOBAL_CONFIG" });
@@ -189,6 +216,7 @@ export async function POST(
       data: {
         stageSolved: stageOrder,
         unlockedBreadcrumb: clue.unlockedBreadcrumbText,
+        explanation: explanationText,
         nextStage: investigation.currentStage,
         progressPct: investigation.progressPct,
         status: investigation.status,

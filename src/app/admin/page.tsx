@@ -42,6 +42,9 @@ import {
   Send,
   Edit3,
   Loader2,
+  BookOpen,
+  GraduationCap,
+  CheckSquare,
 } from "lucide-react";
 
 type AdminTab =
@@ -244,6 +247,16 @@ export default function AdminControlPage() {
   const [aiPublishing, setAiPublishing] = useState(false);
   const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
 
+  // Course-aligned Curriculum state
+  const [coursesList, setCoursesList] = useState<any[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [selectedModuleIdx, setSelectedModuleIdx] = useState(0);
+  const [selectedTopic, setSelectedTopic] = useState("");
+  const [selectedOutcome, setSelectedOutcome] = useState("");
+  const [approvedSyllabusInput, setApprovedSyllabusInput] = useState("");
+  const [aiExpectedDuration, setAiExpectedDuration] = useState(20);
+  const [aiProviderChoice, setAiProviderChoice] = useState<"AUTO" | "GEMINI" | "OPENAI" | "TEMPLATE">("AUTO");
+
   // Notification feedback banner
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const showToast = (text: string, type: "success" | "error" = "success") => {
@@ -424,6 +437,53 @@ export default function AdminControlPage() {
     }
   }, []);
 
+  // 11. Fetch Course Curriculums for Academic AI Synthesis
+  const fetchCourses = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/courses");
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setCoursesList(json.data);
+        if (json.data.length > 0 && !selectedCourseId) {
+          const first = json.data[0];
+          setSelectedCourseId(first._id);
+          if (first.modules && first.modules.length > 0) {
+            setSelectedModuleIdx(0);
+            const mod = first.modules[0];
+            setSelectedTopic(mod.topics?.[0] || "");
+            setSelectedOutcome(mod.learningOutcomes?.[0] || "");
+            setApprovedSyllabusInput(mod.approvedSyllabusText || "");
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Course Curriculums fetch error:", e);
+    }
+  }, [selectedCourseId]);
+
+  const handleCourseChange = (courseId: string) => {
+    setSelectedCourseId(courseId);
+    const found = coursesList.find((c) => c._id === courseId);
+    if (found && found.modules && found.modules.length > 0) {
+      setSelectedModuleIdx(0);
+      const mod = found.modules[0];
+      setSelectedTopic(mod.topics?.[0] || "");
+      setSelectedOutcome(mod.learningOutcomes?.[0] || "");
+      setApprovedSyllabusInput(mod.approvedSyllabusText || "");
+    }
+  };
+
+  const handleModuleChange = (idx: number) => {
+    setSelectedModuleIdx(idx);
+    const found = coursesList.find((c) => c._id === selectedCourseId);
+    if (found && found.modules && found.modules[idx]) {
+      const mod = found.modules[idx];
+      setSelectedTopic(mod.topics?.[0] || "");
+      setSelectedOutcome(mod.learningOutcomes?.[0] || "");
+      setApprovedSyllabusInput(mod.approvedSyllabusText || "");
+    }
+  };
+
   useEffect(() => {
     fetchOverview();
   }, [fetchOverview]);
@@ -436,7 +496,11 @@ export default function AdminControlPage() {
     if (activeTab === "CONTENT_CMS") {
       if (contentSubTab === "QUESTS") fetchCmsQuests();
       if (contentSubTab === "EVENTS") fetchCmsEvents();
-      if (contentSubTab === "LOCATIONS" || contentSubTab === "AI_GENERATOR") fetchCmsLocations();
+      if (contentSubTab === "LOCATIONS") fetchCmsLocations();
+      if (contentSubTab === "AI_GENERATOR") {
+        fetchCmsLocations();
+        fetchCourses();
+      }
       if (contentSubTab === "ACHIEVEMENTS") fetchCmsAchievements();
     }
   }, [
@@ -784,13 +848,16 @@ export default function AdminControlPage() {
     }
   };
 
-  // AI Game Master generation
+  // AI Game Master generation with course curriculum alignment
   const handleAIGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (aiGenerating) return;
     setAiGenerating(true);
     setAiSuccessMessage(null);
     setAiGeneratedData(null);
+
+    const activeCourse = coursesList.find((c) => c._id === selectedCourseId);
+    const activeModule = activeCourse?.modules?.[selectedModuleIdx];
 
     try {
       const res = await fetch("/api/ai/generate-quest", {
@@ -803,21 +870,55 @@ export default function AdminControlPage() {
           questType: aiQuestType,
           locationCode: aiLocationCode || undefined,
           stageCount: aiStageCount,
-          status: "DRAFT",
+          courseId: selectedCourseId || undefined,
+          courseCode: activeCourse?.courseCode,
+          courseName: activeCourse?.courseName,
+          semester: activeCourse?.semester,
+          moduleTitle: activeModule?.title,
+          topic: selectedTopic || activeModule?.topics?.[0],
+          learningOutcome: selectedOutcome || activeModule?.learningOutcomes?.[0],
+          approvedSyllabusText: approvedSyllabusInput || activeModule?.approvedSyllabusText,
+          expectedDurationMinutes: aiExpectedDuration,
+          preferredProvider: aiProviderChoice,
         }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error || "Generation failed.");
 
       setAiGeneratedData(json.data);
-      setAiSuccessMessage(`Generated quest "${json.data?.quest?.title}" via ${json.data?.source}! Review the clue chain below and click "Make Public" when ready.`);
-      showToast(`AI Quest generated in Draft mode: "${json.data?.quest?.title}"`);
+      setAiSuccessMessage(
+        `Draft generated for ${activeCourse?.courseCode || "Course"} via ${json.data?.source}! Review clue stages, expected answers, and safety rationale before publishing.`
+      );
+      showToast(`AI Quest drafted: "${json.data?.quest?.title}"`);
       fetchOverview();
       fetchCmsQuests();
     } catch (e: any) {
       showToast(e.message, "error");
     } finally {
       setAiGenerating(false);
+    }
+  };
+
+  // Reject / Archive AI-generated draft
+  const handleRejectAiQuest = async (questId: string) => {
+    try {
+      const res = await fetch(`/api/admin/quests/${questId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetStatus: "ARCHIVED",
+          reason: "Rejected by staff reviewer during draft preview.",
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || "Failed to reject draft.");
+      showToast("Draft rejected and archived.");
+      setAiGeneratedData(null);
+      setAiSuccessMessage(null);
+      fetchOverview();
+      fetchCmsQuests();
+    } catch (e: any) {
+      showToast(e.message, "error");
     }
   };
 
@@ -2696,59 +2797,137 @@ export default function AdminControlPage() {
                   {/* Left Column: AI Parameters & Prompting Form */}
                   <div className="lg:col-span-5 bg-[#0B0F17] p-5 rounded-2xl border border-white/10 space-y-4">
                     <h4 className="text-xs font-mono font-bold text-slate-300 flex items-center gap-2 border-b border-white/10 pb-3">
-                      <Sparkles className="w-4 h-4 text-emerald-400" />
-                      <span>MISSION SYNTHESIS PARAMETERS</span>
+                      <GraduationCap className="w-4 h-4 text-emerald-400" />
+                      <span>COURSE-ALIGNED SYNTHESIS PARAMETERS</span>
                     </h4>
 
                     <form onSubmit={handleAIGenerate} className="space-y-4">
+                      {/* Course Curriculum Selector */}
+                      <div>
+                        <label className="block text-xs font-mono text-slate-400 mb-1 flex items-center justify-between">
+                          <span>Target Course Curriculum</span>
+                          <span className="text-[10px] text-emerald-400">Approved Syllabus Mode</span>
+                        </label>
+                        <select
+                          value={selectedCourseId}
+                          onChange={(e) => handleCourseChange(e.target.value)}
+                          className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+                        >
+                          {coursesList.map((c) => (
+                            <option key={c._id} value={c._id}>
+                              [{c.courseCode}] {c.courseName} (Sem {c.semester})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Module & Topic Selection */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-mono text-slate-400 mb-1">Module</label>
+                          <select
+                            value={selectedModuleIdx}
+                            onChange={(e) => handleModuleChange(Number(e.target.value))}
+                            className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white"
+                          >
+                            {coursesList
+                              .find((c) => c._id === selectedCourseId)
+                              ?.modules?.map((m: any, idx: number) => (
+                                <option key={idx} value={idx}>
+                                  Mod {m.moduleNumber}: {m.title}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-mono text-slate-400 mb-1">Specific Topic</label>
+                          <input
+                            type="text"
+                            value={selectedTopic}
+                            onChange={(e) => setSelectedTopic(e.target.value)}
+                            placeholder="e.g. Hash Collision Probing"
+                            className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Target Learning Outcome */}
                       <div>
                         <label className="block text-xs font-mono text-slate-400 mb-1">
-                          Mission Prompt / Story Directive
+                          Target Learning Outcome
+                        </label>
+                        <input
+                          type="text"
+                          value={selectedOutcome}
+                          onChange={(e) => setSelectedOutcome(e.target.value)}
+                          placeholder="e.g. Calculate hash table indices and linear probing collisions"
+                          className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+                        />
+                      </div>
+
+                      {/* Approved Syllabus Material Excerpt */}
+                      <div>
+                        <label className="block text-xs font-mono text-slate-400 mb-1 flex items-center justify-between">
+                          <span>Approved Syllabus Excerpt (Reference Grounding)</span>
+                          <span className="text-[10px] text-amber-400/90 font-bold">Strict Fact Grounding</span>
                         </label>
                         <textarea
                           rows={3}
-                          value={aiPrompt}
-                          onChange={(e) => setAiPrompt(e.target.value)}
-                          placeholder="e.g. A missing laboratory oscilloscope has vanished near the Electronics Lab. Lead the investigator through testbenches to find the physical clue..."
-                          className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-400 leading-relaxed"
+                          value={approvedSyllabusInput}
+                          onChange={(e) => setApprovedSyllabusInput(e.target.value)}
+                          placeholder="Approved formulas, definitions, and principles from the official syllabus..."
+                          className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-slate-300 focus:outline-none focus:border-emerald-400 leading-relaxed"
                         />
-                        <span className="text-[10px] text-slate-500 font-mono mt-1 block">
-                          Optional: Provide narrative themes, specific item details, or campus lore.
+                        <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">
+                          AI generation is strictly constrained to facts, formulas, and concepts in this excerpt.
                         </span>
                       </div>
 
+                      {/* AI Provider & Fallback Preference */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-mono text-slate-400 mb-1">Category / Type</label>
+                          <label className="block text-xs font-mono text-slate-400 mb-1">AI Provider Engine</label>
                           <select
-                            value={aiQuestType}
-                            onChange={(e) => setAiQuestType(e.target.value)}
+                            value={aiProviderChoice}
+                            onChange={(e) => setAiProviderChoice(e.target.value as any)}
                             className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white"
                           >
-                            <option value="CAMPUS_TREASURE">Campus Treasure Hunt</option>
-                            <option value="INVESTIGATION">Lost Item Investigation</option>
-                            <option value="MYSTERY">Campus Mystery & Lore</option>
-                            <option value="SQUAD_HUNT">Squad Raid Challenge</option>
-                            <option value="DAILY_HUNT">Daily Campus Sprint</option>
-                            <option value="QUICK_FIND">Quick Find (1-2 Min)</option>
+                            <option value="AUTO">Auto (Gemini / OpenAI / Syllabus Fallback)</option>
+                            <option value="GEMINI">Google Gemini (API Key)</option>
+                            <option value="OPENAI">OpenAI GPT-4o-mini (API Key)</option>
+                            <option value="TEMPLATE">Deterministic Syllabus Engine (Local)</option>
                           </select>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-mono text-slate-400 mb-1">Theme</label>
-                          <select
-                            value={aiTheme}
-                            onChange={(e) => setAiTheme(e.target.value)}
+                          <label className="block text-xs font-mono text-slate-400 mb-1">Expected Duration</label>
+                          <input
+                            type="number"
+                            min={5}
+                            max={120}
+                            value={aiExpectedDuration}
+                            onChange={(e) => setAiExpectedDuration(Number(e.target.value))}
                             className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white"
-                          >
-                            <option value="CAMPUS_MYSTERY">Campus History & Secret Archives</option>
-                            <option value="TECHNICAL_ENGINEERING">Engineering Lab Artifacts</option>
-                            <option value="LIBRARY_EXPEDITION">Archival Library Breadcrumbs</option>
-                            <option value="FEST_SCAVENGER">Campus Scavenger Fest</option>
-                          </select>
+                          />
                         </div>
                       </div>
 
+                      {/* Optional Context Directive */}
+                      <div>
+                        <label className="block text-xs font-mono text-slate-400 mb-1">
+                          Narrative Context / Clue Flavoring Directive
+                        </label>
+                        <input
+                          type="text"
+                          value={aiPrompt}
+                          onChange={(e) => setAiPrompt(e.target.value)}
+                          placeholder="e.g. Missing laboratory instrument telemetry breadcrumbs..."
+                          className="w-full bg-[#070A0F] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-400"
+                        />
+                      </div>
+
+                      {/* Difficulty Level */}
                       <div>
                         <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-1">
                           <span>Difficulty Level: {aiDifficulty} / 5</span>
@@ -2771,6 +2950,7 @@ export default function AdminControlPage() {
                         </div>
                       </div>
 
+                      {/* Clue Stages Count */}
                       <div>
                         <label className="block text-xs font-mono text-slate-400 mb-1.5">
                           Clue Stages Count ({aiStageCount} Clues)
@@ -2793,6 +2973,7 @@ export default function AdminControlPage() {
                         </div>
                       </div>
 
+                      {/* Anchor Campus Location */}
                       <div>
                         <label className="block text-xs font-mono text-slate-400 mb-1">
                           Anchor Campus Location
@@ -2817,7 +2998,7 @@ export default function AdminControlPage() {
                         className="w-full py-3 bg-gradient-to-r from-violet-600 via-emerald-600 to-teal-500 hover:from-violet-500 hover:to-emerald-400 text-white font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
                       >
                         <Sparkles className={`w-4 h-4 ${aiGenerating ? "animate-spin" : ""}`} />
-                        <span>{aiGenerating ? "Synthesizing Clue Chains & Answers..." : "🤖 Synthesize Quest with AI"}</span>
+                        <span>{aiGenerating ? "Synthesizing Course-Aligned Blueprint..." : "🤖 Synthesize Course-Aligned Quest"}</span>
                       </button>
                     </form>
                   </div>
@@ -2829,23 +3010,28 @@ export default function AdminControlPage() {
                         {/* Header & Status */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono text-xs text-amber-400 font-bold">
                                 {aiGeneratedData.quest?.questCode}
                               </span>
+                              {aiGeneratedData.quest?.courseCode && (
+                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">
+                                  {aiGeneratedData.quest?.courseCode}
+                                </span>
+                              )}
                               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-bold">
                                 {aiGeneratedData.quest?.questType}
                               </span>
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-violet-500/20 text-violet-300">
-                                {aiGeneratedData.source}
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30">
+                                {aiGeneratedData.source} ({aiGeneratedData.modelName})
                               </span>
                             </div>
-                            <h3 className="text-lg font-bold text-white mt-1">
+                            <h3 className="text-lg font-bold text-white mt-1.5">
                               {aiGeneratedData.quest?.title}
                             </h3>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 shrink-0">
                             {aiGeneratedData.quest?.status === "ACTIVE" ? (
                               <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 shadow-sm">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
@@ -2854,44 +3040,89 @@ export default function AdminControlPage() {
                             ) : (
                               <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5">
                                 <Clock className="w-3.5 h-3.5 text-amber-400" />
-                                DRAFT (READY FOR REVIEW)
+                                DRAFT (STAFF REVIEW REQUIRED)
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Storyline & Description */}
+                        {/* Fallback Notice if triggered */}
+                        {aiGeneratedData.fallbackTriggered && (
+                          <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-mono flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                            <div>
+                              <span className="font-bold">Provider Fallback Note: </span>
+                              <span>{aiGeneratedData.fallbackReason || "Deterministic academic syllabus engine engaged for guaranteed curriculum accuracy."}</span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Pedagogical Alignment Card */}
+                        {(aiGeneratedData.quest?.topic || aiGeneratedData.quest?.learningOutcome) && (
+                          <div className="p-3.5 rounded-xl bg-slate-950 border border-white/10 space-y-2 text-xs font-mono">
+                            <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
+                              <span className="text-emerald-400 font-bold flex items-center gap-1.5 text-[11px]">
+                                <GraduationCap className="w-3.5 h-3.5" />
+                                PEDAGOGICAL ALIGNMENT
+                              </span>
+                              <span className="text-slate-400 text-[10px]">
+                                Duration: ~{aiGeneratedData.quest?.expectedDurationMinutes || 20}m
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                              <div>
+                                <span className="text-slate-500 block text-[10px]">Course Topic:</span>
+                                <span className="text-slate-200 font-medium">{aiGeneratedData.quest?.topic}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block text-[10px]">Learning Outcome:</span>
+                                <span className="text-slate-200 font-medium">{aiGeneratedData.quest?.learningOutcome}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Storyline Briefing */}
                         <div className="space-y-1 text-xs">
-                          <span className="font-mono text-slate-400 uppercase text-[10px]">Storyline Briefing</span>
+                          <span className="font-mono text-slate-400 uppercase text-[10px]">Student Mission Briefing</span>
                           <p className="text-slate-300 bg-[#070A0F] p-3 rounded-xl border border-white/5 leading-relaxed font-mono">
                             {aiGeneratedData.quest?.description}
                           </p>
                         </div>
 
-                        {/* Parameters & Rewards */}
-                        <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono">
-                          <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                            <span className="text-[10px] text-emerald-400 block font-bold">REWARD XP</span>
-                            <span className="text-sm font-black text-white">+{aiGeneratedData.quest?.xpReward}</span>
+                        {/* Safety Rationale & Reviewer Notes */}
+                        {(aiGeneratedData.quest?.safetyRationale || aiGeneratedData.quest?.reviewerAssumptions) && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+                            <div className="p-3 rounded-xl bg-slate-950 border border-white/5 space-y-1">
+                              <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                                <Shield className="w-3 h-3" />
+                                SAFETY RATIONALE
+                              </span>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">
+                                {aiGeneratedData.quest?.safetyRationale}
+                              </p>
+                            </div>
+                            <div className="p-3 rounded-xl bg-slate-950 border border-white/5 space-y-1">
+                              <span className="text-[10px] text-cyan-400 font-bold flex items-center gap-1">
+                                <BookOpen className="w-3 h-3" />
+                                REVIEWER ASSUMPTIONS
+                              </span>
+                              <p className="text-[11px] text-slate-300 leading-relaxed">
+                                {aiGeneratedData.quest?.reviewerAssumptions}
+                              </p>
+                            </div>
                           </div>
-                          <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                            <span className="text-[10px] text-amber-400 block font-bold">COINS</span>
-                            <span className="text-sm font-black text-white">+{aiGeneratedData.quest?.coinReward} 🪙</span>
-                          </div>
-                          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-                            <span className="text-[10px] text-cyan-400 block font-bold">DIFFICULTY</span>
-                            <span className="text-sm font-black text-white">{"★".repeat(aiGeneratedData.quest?.difficulty || 3)}</span>
-                          </div>
-                        </div>
+                        )}
 
                         {/* Clue Chain Stages Review */}
                         <div className="space-y-3 pt-2">
                           <div className="flex items-center justify-between border-b border-white/10 pb-2">
                             <span className="text-xs font-mono font-bold text-slate-300">
-                              CLUE STAGES & VERIFICATION BLUEPRINT ({aiGeneratedData.clues?.length || 0} STAGES)
+                              CLUE STAGES & DETERMINISTIC RUBRIC ({aiGeneratedData.clues?.length || 0} STAGES)
                             </span>
-                            <span className="text-[10px] font-mono text-emerald-400">
-                              Verified Safe & Answers Normalized
+                            <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Automated Safety & Bounds Verified
                             </span>
                           </div>
 
@@ -2899,14 +3130,14 @@ export default function AdminControlPage() {
                             {aiGeneratedData.clues?.map((clue: any, idx: number) => (
                               <div
                                 key={idx}
-                                className="p-4 rounded-xl bg-[#070A0F] border border-white/10 space-y-2 text-xs font-mono"
+                                className="p-4 rounded-xl bg-[#070A0F] border border-white/10 space-y-2.5 text-xs font-mono"
                               >
                                 <div className="flex items-center justify-between">
                                   <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold text-[10px]">
                                     Stage {clue.stageOrder}: {clue.title}
                                   </span>
                                   <span className="text-[10px] text-slate-400">
-                                    Type: <span className="text-cyan-400">{clue.verificationType}</span>
+                                    Type: <span className="text-cyan-400 font-bold">{clue.verificationType}</span>
                                   </span>
                                 </div>
 
@@ -2914,9 +3145,30 @@ export default function AdminControlPage() {
                                   {clue.clueText}
                                 </p>
 
+                                {/* Multiple choice options if present */}
+                                {clue.verificationType === "MULTIPLE_CHOICE" && clue.options && clue.options.length > 0 && (
+                                  <div className="p-2.5 rounded-lg bg-slate-950 border border-white/5 space-y-1.5">
+                                    <span className="text-[10px] text-slate-500 block">Randomized Options (Graded by ID):</span>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                      {clue.options.map((opt: any, oIdx: number) => (
+                                        <div
+                                          key={opt.id || oIdx}
+                                          className={`p-2 rounded text-[11px] border ${
+                                            opt.id === (clue.correctOptionId || clue.expectedAnswer)
+                                              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-300 font-bold"
+                                              : "border-white/5 bg-white/5 text-slate-400"
+                                          }`}
+                                        >
+                                          {opt.id === (clue.correctOptionId || clue.expectedAnswer) ? "✓ " : ""}{opt.text}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
                                 <div className="flex flex-wrap items-center gap-2 pt-1">
                                   <div className="px-2.5 py-1 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-[11px] font-bold">
-                                    🔑 Answer: <span className="text-white underline">{clue.expectedAnswer}</span>
+                                    🔑 Expected Answer: <span className="text-white underline">{clue.expectedAnswer}</span>
                                   </div>
 
                                   {clue.hintText && (
@@ -2925,6 +3177,12 @@ export default function AdminControlPage() {
                                     </div>
                                   )}
                                 </div>
+
+                                {clue.explanation && (
+                                  <div className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/20 text-[11px] text-emerald-300/90 leading-relaxed">
+                                    🎓 <span className="font-bold text-white">Syllabus Explanation:</span> {clue.explanation}
+                                  </div>
+                                )}
 
                                 {clue.unlockedBreadcrumbText && (
                                   <div className="text-[10px] text-slate-400 italic pt-1 border-t border-white/5">
@@ -2939,27 +3197,39 @@ export default function AdminControlPage() {
                         {/* Action Bar */}
                         <div className="pt-4 border-t border-white/10 space-y-3">
                           {aiGeneratedData.quest?.status === "DRAFT" ? (
-                            <div className="space-y-2">
-                              <button
-                                type="button"
-                                onClick={() => handleMakeAiQuestPublic(aiGeneratedData.quest?._id)}
-                                disabled={aiPublishing}
-                                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer"
-                              >
-                                {aiPublishing ? (
-                                  <>
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                    <span>Publishing to Campus Board...</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    <span>🚀 Make Public (Publish to Campus Board)</span>
-                                  </>
-                                )}
-                              </button>
+                            <div className="space-y-2.5">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMakeAiQuestPublic(aiGeneratedData.quest?._id)}
+                                  disabled={aiPublishing}
+                                  className="py-3 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                                >
+                                  {aiPublishing ? (
+                                    <>
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                      <span>Publishing to Campus Board...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="w-4 h-4" />
+                                      <span>✅ Approve & Publish Live</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRejectAiQuest(aiGeneratedData.quest?._id)}
+                                  className="py-3 px-4 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 font-mono font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                                >
+                                  <X className="w-4 h-4" />
+                                  <span>❌ Reject & Archive Draft</span>
+                                </button>
+                              </div>
+
                               <p className="text-[11px] font-mono text-slate-400 text-center">
-                                When made public, this quest will immediately appear on the public quest board for students to play and earn rewards.
+                                All AI-generated quests require deliberate faculty approval. Once approved, the quest becomes active for students with per-player parameter variants.
                               </p>
                             </div>
                           ) : (

@@ -62,7 +62,7 @@ export default function InvestigationRoomClient({
   // Clue solving form
   const [answerInput, setAnswerInput] = useState("");
   const [solving, setSolving] = useState(false);
-  const [solveMessage, setSolveMessage] = useState<{ text: string; error?: boolean } | null>(null);
+  const [solveMessage, setSolveMessage] = useState<{ text: string; explanation?: string; error?: boolean } | null>(null);
 
   // Hint unlocking
   const [hintLoading, setHintLoading] = useState(false);
@@ -218,7 +218,11 @@ export default function InvestigationRoomClient({
       if (typeof window !== "undefined" && "vibrate" in navigator) {
         navigator.vibrate(120);
       }
-      setSolveMessage({ text: json.data?.message || "Stage Solved!", error: false });
+      setSolveMessage({
+        text: json.data?.message || "Stage Solved!",
+        explanation: json.data?.explanation || "",
+        error: false,
+      });
       setAnswerInput("");
 
       // Update investigation state
@@ -694,13 +698,49 @@ export default function InvestigationRoomClient({
               </div>
 
               <form onSubmit={handleSolveClue} className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Enter riddle answer or marker code..."
-                  value={answerInput}
-                  onChange={(e) => setAnswerInput(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:border-amber-400 font-mono"
-                />
+                {currentClue.verificationType === "MULTIPLE_CHOICE" && Array.isArray(currentClue.options) && currentClue.options.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-mono text-slate-400">Select the option corresponding to your deduction:</p>
+                    <div className="grid grid-cols-1 gap-2">
+                      {currentClue.options.map((opt: any, idx: number) => {
+                        const isSelected = answerInput === opt.id;
+                        return (
+                          <button
+                            key={opt.id || idx}
+                            type="button"
+                            onClick={() => setAnswerInput(opt.id)}
+                            className={`w-full p-3 rounded-xl border text-left text-xs font-mono transition-all flex items-start gap-3 cursor-pointer ${
+                              isSelected
+                                ? "bg-amber-500/20 border-amber-400 text-amber-200 shadow-md shadow-amber-500/10"
+                                : "bg-slate-950/80 border-white/10 text-slate-300 hover:border-white/20 hover:bg-slate-950"
+                            }`}
+                          >
+                            <span
+                              className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                                isSelected ? "bg-amber-400 text-slate-950" : "bg-white/10 text-slate-400"
+                              }`}
+                            >
+                              {String.fromCharCode(65 + idx)}
+                            </span>
+                            <span className="leading-relaxed">{opt.text}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder={
+                      currentClue.verificationType === "NUMERIC_CALCULATION"
+                        ? "Enter calculated numeric value (e.g. 7000)..."
+                        : "Enter riddle answer or marker code..."
+                    }
+                    value={answerInput}
+                    onChange={(e) => setAnswerInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-white/10 text-white text-xs focus:outline-none focus:border-amber-400 font-mono"
+                  />
+                )}
 
                 <button
                   type="submit"
@@ -723,18 +763,25 @@ export default function InvestigationRoomClient({
 
               {solveMessage && (
                 <div
-                  className={`p-3 rounded-xl text-xs font-mono flex items-center gap-2 ${
+                  className={`p-3.5 rounded-xl text-xs font-mono space-y-1.5 ${
                     solveMessage.error
                       ? "bg-rose-500/10 border border-rose-500/30 text-rose-400"
                       : "bg-emerald-500/10 border border-emerald-500/30 text-emerald-300"
                   }`}
                 >
-                  {solveMessage.error ? (
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                  ) : (
-                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <div className="flex items-center gap-2">
+                    {solveMessage.error ? (
+                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    )}
+                    <span className="font-bold">{solveMessage.text}</span>
+                  </div>
+                  {solveMessage.explanation && (
+                    <div className="pl-6 text-[11px] text-emerald-400/90 leading-relaxed border-t border-emerald-500/20 pt-1.5 mt-1">
+                      💡 <span className="font-bold text-white">Syllabus Explanation:</span> {solveMessage.explanation}
+                    </div>
                   )}
-                  <span>{solveMessage.text}</span>
                 </div>
               )}
             </div>
