@@ -38,6 +38,8 @@ interface UserSession {
   rankTitle: string;
   coins: number;
   xp: number;
+  trophies?: number;
+  weeklyScore?: number;
   trustScore: number;
   trustTier: string;
   avatarUrl?: string;
@@ -189,7 +191,7 @@ export default function Navbar() {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center gap-4 xl:gap-6">
-              <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0">
+              <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 rounded-xl">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-600 p-0.5 shadow-lg shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-all flex-shrink-0">
                   <div className="w-full h-full bg-[#0B0F17] rounded-[10px] flex items-center justify-center">
                     <Compass className="w-5 h-5 text-emerald-400 group-hover:rotate-45 transition-transform duration-300" />
@@ -223,7 +225,7 @@ export default function Navbar() {
                     <Link
                       key={link.href}
                       href={link.href}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
                         isActive
                           ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold"
                           : "text-slate-300 hover:text-white hover:bg-white/5"
@@ -241,7 +243,7 @@ export default function Navbar() {
                     <button
                       type="button"
                       onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
                     >
                       <Shield className="w-3 h-3" />
                       <span>Staff</span>
@@ -254,7 +256,7 @@ export default function Navbar() {
                           <Link
                             href="/staff"
                             onClick={() => setMoreMenuOpen(false)}
-                            className="flex items-start gap-2.5 px-3 py-2 rounded-xl text-emerald-400 hover:bg-white/5 transition-all"
+                            className="flex items-start gap-2.5 px-3 py-2 rounded-xl text-emerald-400 hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                           >
                             <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
                             <div>
@@ -267,7 +269,7 @@ export default function Navbar() {
                           <Link
                             href="/admin"
                             onClick={() => setMoreMenuOpen(false)}
-                            className="flex items-start gap-2.5 px-3 py-2 rounded-xl text-amber-400 hover:bg-white/5 transition-all"
+                            className="flex items-start gap-2.5 px-3 py-2 rounded-xl text-amber-400 hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                           >
                             <Shield className="w-4 h-4 mt-0.5 flex-shrink-0" />
                             <div>
@@ -291,7 +293,7 @@ export default function Navbar() {
                     <Link
                       key={link.href}
                       href={link.href}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
                         isActive
                           ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold"
                           : "text-slate-300 hover:text-white hover:bg-white/5"
@@ -308,7 +310,7 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={() => setMoreMenuOpen(!moreMenuOpen)}
-                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950 ${
                       isSecondaryActive
                         ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold"
                         : "text-slate-300 hover:text-white hover:bg-white/5"
@@ -328,7 +330,7 @@ export default function Navbar() {
                             key={item.href}
                             href={item.href}
                             onClick={() => setMoreMenuOpen(false)}
-                            className={`flex items-start gap-2.5 px-3 py-2 rounded-xl transition-all ${
+                            className={`flex items-start gap-2.5 px-3 py-2 rounded-xl transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
                               isActive
                                 ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-bold"
                                 : "text-slate-300 hover:bg-white/5 hover:text-white"
@@ -353,6 +355,16 @@ export default function Navbar() {
               {/* User Stats / Controls */}
               {user ? (
                 <div className="flex items-center gap-2 sm:gap-2.5">
+                  {/* Trophies Standings Pill */}
+                  <Link
+                    href="/leaderboard"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/25 hover:border-amber-400/50 hover:bg-amber-500/20 text-amber-400 font-mono text-xs font-bold transition-all shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                    title="Operative Trophies (Leaderboard Standings)"
+                  >
+                    <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{(user.trophies || 0).toLocaleString()}</span>
+                  </Link>
+
                   {/* Compact Coins & XP Pill */}
                   <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-slate-900/90 border border-white/10 text-xs font-mono">
                     <div className="flex items-center gap-1 text-amber-400 font-bold">
@@ -368,7 +380,7 @@ export default function Navbar() {
                   {/* Notifications Bell (Compact Badge linking to /notifications) */}
                   <Link
                     href="/notifications"
-                    className="relative p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center"
+                    className="relative p-2 min-w-[40px] min-h-[40px] rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
                     aria-label="Notifications"
                     title="Mission Notifications & Alerts"
                   >
@@ -383,8 +395,9 @@ export default function Navbar() {
                   {/* User Profile Avatar Dropdown */}
                   <div className="relative">
                     <button
+                      type="button"
                       onClick={() => setUserMenuOpen(!userMenuOpen)}
-                      className="flex items-center gap-1.5 p-1 rounded-xl hover:bg-white/5 transition-colors"
+                      className="flex items-center justify-center min-w-[44px] min-h-[44px] p-1.5 rounded-xl hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
                       aria-label="User Menu"
                     >
                       <div className="w-8 h-8 rounded-full bg-slate-800 border border-emerald-500/40 flex items-center justify-center font-mono text-xs font-bold text-emerald-400">
@@ -397,16 +410,22 @@ export default function Navbar() {
                         <div className="px-3 py-2 border-b border-white/5 mb-1">
                           <div className="font-bold text-white">{user.displayName}</div>
                           <div className="text-[10px] text-slate-400 font-mono">@{user.username}</div>
-                          <div className="mt-1 flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
-                            <Shield className="w-3 h-3" />
-                            {user.trustTier?.replace(/_/g, " ")}
+                          <div className="mt-1 flex items-center justify-between text-[10px] font-mono">
+                            <div className="flex items-center gap-1 text-emerald-400">
+                              <Shield className="w-3 h-3" />
+                              <span>Verified Operative</span>
+                            </div>
+                            <div className="flex items-center gap-1 text-amber-400 font-bold">
+                              <Trophy className="w-3 h-3" />
+                              <span>{(user.trophies || 0).toLocaleString()} 🏆</span>
+                            </div>
                           </div>
                         </div>
 
                         <Link
                           href="/dashboard"
                           onClick={() => setUserMenuOpen(false)}
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                         >
                           <LayoutDashboard className="w-3.5 h-3.5 text-emerald-400" />
                           <span>Investigator HQ</span>
@@ -415,7 +434,7 @@ export default function Navbar() {
                         <Link
                           href={`/profile/${user.username}`}
                           onClick={() => setUserMenuOpen(false)}
-                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white"
+                          className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                         >
                           <Award className="w-3.5 h-3.5 text-cyan-400" />
                           <span>My Profile & Dossier</span>
@@ -426,7 +445,7 @@ export default function Navbar() {
                           <Link
                             href="/squads"
                             onClick={() => setUserMenuOpen(false)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:bg-white/5 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                           >
                             <Users className="w-3.5 h-3.5 text-emerald-400" />
                             Squad: [{user.squad.tag}] {user.squad.name}
@@ -437,7 +456,7 @@ export default function Navbar() {
                           <Link
                             href="/staff"
                             onClick={() => setUserMenuOpen(false)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-emerald-400 hover:bg-emerald-400/10"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-emerald-400 hover:bg-emerald-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                           >
                             <Shield className="w-3.5 h-3.5" />
                             Safe-Desk Station
@@ -448,7 +467,7 @@ export default function Navbar() {
                           <Link
                             href="/admin"
                             onClick={() => setUserMenuOpen(false)}
-                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-400/10"
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg text-amber-400 hover:bg-amber-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                           >
                             <Shield className="w-3.5 h-3.5" />
                             Admin Console
@@ -459,7 +478,7 @@ export default function Navbar() {
                           type="button"
                           onClick={handleLogout}
                           disabled={isLoggingOut}
-                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-rose-400 hover:bg-rose-500/10 text-left mt-1 border-t border-white/5 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer font-medium text-xs font-mono"
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-rose-400 hover:bg-rose-500/10 text-left mt-1 border-t border-white/5 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer font-medium text-xs font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                         >
                           {isLoggingOut ? (
                             <>
@@ -481,13 +500,13 @@ export default function Navbar() {
                 <div className="flex items-center gap-2">
                   <Link
                     href="/login"
-                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-all"
+                    className="px-3 py-1.5 min-h-[36px] flex items-center rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   >
                     Log In
                   </Link>
                   <Link
                     href="/register"
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20"
+                    className="px-3.5 py-1.5 min-h-[36px] flex items-center rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   >
                     Join
                   </Link>
@@ -498,7 +517,7 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={() => setMobileDrawerOpen(!mobileDrawerOpen)}
-                className="lg:hidden p-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors"
+                className="lg:hidden p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                 aria-label="Toggle Navigation Menu"
               >
                 {mobileDrawerOpen ? <X className="w-5 h-5 text-emerald-400" /> : <Menu className="w-5 h-5" />}
@@ -526,7 +545,8 @@ export default function Navbar() {
                 </span>
                 <button
                   onClick={() => setMobileDrawerOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10"
+                  className="p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                  aria-label="Close navigation menu"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -537,7 +557,7 @@ export default function Navbar() {
                 <Link
                   href={`/profile/${user.username}`}
                   onClick={() => setMobileDrawerOpen(false)}
-                  className="block p-3 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 transition-all space-y-2 group"
+                  className="block p-3 rounded-xl bg-slate-900 border border-white/10 hover:border-emerald-500/40 transition-all space-y-2 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                 >
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-mono font-bold flex items-center justify-center text-sm group-hover:scale-105 transition-transform">
@@ -550,9 +570,12 @@ export default function Navbar() {
                   </div>
                   <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[11px] font-mono">
                     <span className="text-amber-400 flex items-center gap-1 font-bold">
-                      <Coins className="w-3.5 h-3.5" /> {user.coins} Coins
+                      <Trophy className="w-3.5 h-3.5" /> {(user.trophies || 0).toLocaleString()} 🏆
                     </span>
-                    <span className="text-emerald-400">LVL {user.level}</span>
+                    <span className="text-amber-300 flex items-center gap-1 font-bold">
+                      <Coins className="w-3.5 h-3.5" /> {user.coins} 🪙
+                    </span>
+                    <span className="text-emerald-400 font-bold">LVL {user.level}</span>
                   </div>
                 </Link>
               )}
@@ -570,7 +593,7 @@ export default function Navbar() {
                       key={link.href}
                       href={link.href}
                       onClick={() => setMobileDrawerOpen(false)}
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                      className={`flex items-center gap-3 px-3 py-2.5 min-h-[44px] rounded-xl text-xs font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${
                         isActive
                           ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-bold"
                           : link.highlight
@@ -609,7 +632,7 @@ export default function Navbar() {
                   type="button"
                   onClick={handleLogout}
                   disabled={isLoggingOut}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono font-bold disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 min-h-[44px] rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono font-bold disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                 >
                   {isLoggingOut ? (
                     <>
@@ -628,14 +651,14 @@ export default function Navbar() {
                   <Link
                     href="/login"
                     onClick={() => setMobileDrawerOpen(false)}
-                    className="py-2.5 text-center rounded-xl bg-slate-900 border border-white/10 text-slate-200 font-bold"
+                    className="py-2.5 min-h-[44px] flex items-center justify-center text-center rounded-xl bg-slate-900 border border-white/10 text-slate-200 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   >
                     Log In
                   </Link>
                   <Link
                     href="/register"
                     onClick={() => setMobileDrawerOpen(false)}
-                    className="py-2.5 text-center rounded-xl bg-emerald-500 text-slate-950 font-bold"
+                    className="py-2.5 min-h-[44px] flex items-center justify-center text-center rounded-xl bg-emerald-500 text-slate-950 font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   >
                     Register
                   </Link>

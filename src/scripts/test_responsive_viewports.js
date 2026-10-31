@@ -104,8 +104,9 @@ async function runResponsiveViewportSuite() {
     // Login as Admin
     await page.setViewport({ width: 1440, height: 900 });
     await page.goto(`${BASE_URL}/login`, { waitUntil: "networkidle2", timeout: 20000 });
-    await page.type('input[autocomplete="username"], input[name="identifier"], input[type="text"]', "admin@aiemgoa.ac.in");
-    await page.type('input[autocomplete="current-password"], input[type="password"]', "Hunter@123");
+    await page.waitForSelector("#login-identifier", { timeout: 10000 });
+    await page.type("#login-identifier", "admin@aiemgoa.ac.in");
+    await page.type("#login-password", "Hunter@123");
     await page.click('button[type="submit"]');
     await new Promise((r) => setTimeout(r, 2500));
 
