@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ["mongoose"],
   webpack: (config, { dev }) => {
     // In local development on Windows, use in-memory cache to prevent
     // PackFileCacheStrategy ENOENT file-locking errors ('0.pack.gz_' -> '0.pack.gz')
@@ -13,6 +14,35 @@ const nextConfig = {
     return config;
   },
   experimental: {},
+  async redirects() {
+    return [
+      {
+        source: "/signup",
+        destination: "/register",
+        permanent: false,
+      },
+      {
+        source: "/signin",
+        destination: "/login",
+        permanent: false,
+      },
+      {
+        source: "/inventory",
+        destination: "/profile?tab=locker",
+        permanent: false,
+      },
+      {
+        source: "/items/lost",
+        destination: "/lost-and-found/report-lost",
+        permanent: false,
+      },
+      {
+        source: "/items/found",
+        destination: "/lost-and-found/report-found",
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {
