@@ -380,7 +380,7 @@ export default function Navbar() {
                   {/* Notifications Bell (Compact Badge linking to /notifications) */}
                   <Link
                     href="/notifications"
-                    className="relative p-2 min-w-[40px] min-h-[40px] rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                    className="relative p-2 min-w-[44px] min-h-[44px] rounded-xl text-slate-300 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
                     aria-label="Notifications"
                     title="Mission Notifications & Alerts"
                   >
@@ -500,13 +500,13 @@ export default function Navbar() {
                 <div className="flex items-center gap-2">
                   <Link
                     href="/login"
-                    className="px-3 py-1.5 min-h-[36px] flex items-center rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                    className="px-3 py-1.5 min-h-[44px] flex items-center rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/5 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   >
                     Log In
                   </Link>
                   <Link
                     href="/register"
-                    className="px-3.5 py-1.5 min-h-[36px] flex items-center rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+                    className="px-3.5 py-1.5 min-h-[44px] flex items-center rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-all shadow-md shadow-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                   >
                     Join
                   </Link>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
@@ -201,7 +201,7 @@ export default function CampusMapPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     Promise.all([
       fetch("/api/locations").then((r) => r.json()),
       fetch("/api/items").then((r) => r.json()),
@@ -241,18 +241,18 @@ export default function CampusMapPage() {
             };
           });
           setLocations(enriched);
-          if (!selectedLocation) setSelectedLocation(enriched[0]);
+          setSelectedLocation((prev) => prev || enriched[0]);
         }
       })
       .catch((err) => {
         console.warn("Using offline fallback campus locations:", err);
       })
       .finally(() => setLoading(false));
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   const isAdminOrStaff = currentUser && (currentUser.role === "ADMIN" || currentUser.role === "MODERATOR" || currentUser.role === "SAFE_DESK_STAFF");
 
@@ -468,7 +468,7 @@ export default function CampusMapPage() {
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-white/10 text-xs font-mono">
+          <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-white/10 text-xs font-mono overflow-x-auto no-scrollbar">
             {[
               { id: "ALL", label: "All Sectors" },
               { id: "SAFE_DESK", label: "Safe-Desks" },
@@ -478,7 +478,7 @@ export default function CampusMapPage() {
               <button
                 key={f.id}
                 onClick={() => setFilterType(f.id as any)}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all shrink-0 ${
                   filterType === f.id
                     ? "bg-emerald-500 text-slate-950 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
                     : "text-slate-400 hover:text-white"

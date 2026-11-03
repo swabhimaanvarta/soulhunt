@@ -76,6 +76,7 @@ function LostAndFoundDirectoryContent() {
   const [custodyFilter, setCustodyFilter] = useState(initialCustody);
   const [sortOrder, setSortOrder] = useState(initialSort);
   const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [appliedSearch, setAppliedSearch] = useState(initialSearch);
 
   const [items, setItems] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
@@ -150,7 +151,7 @@ function LostAndFoundDirectoryContent() {
         if (statusFilter !== "ALL") params.set("status", statusFilter);
         if (custodyFilter !== "ALL") params.set("custodyStatus", custodyFilter);
         if (sortOrder !== "newest") params.set("sort", sortOrder);
-        if (searchQuery.trim()) params.set("search", searchQuery.trim());
+        if (appliedSearch.trim()) params.set("search", appliedSearch.trim());
         params.set("limit", "20");
 
         if (cursorToFetch) {
@@ -180,7 +181,7 @@ function LostAndFoundDirectoryContent() {
         setLoadingMore(false);
       }
     },
-    [typeFilter, categoryFilter, locationFilter, statusFilter, custodyFilter, sortOrder, searchQuery]
+    [typeFilter, categoryFilter, locationFilter, statusFilter, custodyFilter, sortOrder, appliedSearch]
   );
 
   // Fetch campus locations for filter selector
@@ -194,12 +195,12 @@ function LostAndFoundDirectoryContent() {
   // Fetch items when primary filters change
   useEffect(() => {
     fetchItems(null, false);
-  }, [typeFilter, categoryFilter, locationFilter, statusFilter, custodyFilter, sortOrder]);
+  }, [fetchItems]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateQueryParams({ search: searchQuery });
-    fetchItems(null, false);
+    setAppliedSearch(searchQuery);
   };
 
   const handleClearAll = () => {
@@ -210,6 +211,7 @@ function LostAndFoundDirectoryContent() {
     setCustodyFilter("ALL");
     setSortOrder("newest");
     setSearchQuery("");
+    setAppliedSearch("");
     router.replace(pathname, { scroll: false });
   };
 
@@ -320,7 +322,7 @@ function LostAndFoundDirectoryContent() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/lost-and-found/report-lost"
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all"
@@ -335,14 +337,40 @@ function LostAndFoundDirectoryContent() {
             <Shield className="w-4 h-4 text-cyan-400" />
             Turn in Found
           </Link>
+          <Link
+            href="/dashboard#personal-ops"
+            id="my-personal-ops-btn"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900/90 text-cyan-300 hover:text-cyan-200 border border-cyan-500/30 hover:border-cyan-400/50 font-bold text-xs shadow-lg shadow-cyan-950/40 transition-all group"
+            title="Track items reported by you, founded by you, claimed, or clues solved"
+          >
+            <Layers className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+            <span>My Reports & Submissions</span>
+          </Link>
         </div>
+      </div>
+
+      {/* Direct Personal Operations Activity Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-xl bg-slate-900/60 border border-cyan-500/20 text-xs font-mono shadow-md">
+        <div className="flex items-center gap-2.5 text-slate-300">
+          <PackageCheck className="w-4 h-4 text-cyan-400 shrink-0" />
+          <span>
+            Looking for items reported by you, founded by you, or your claims status?
+          </span>
+        </div>
+        <Link
+          href="/dashboard#personal-ops"
+          className="flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 underline underline-offset-4 font-bold shrink-0 transition-colors"
+        >
+          <span>Open My Personal Ops Ledger</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
       {/* Filter and Mode Control Surface */}
       <div className="glass-panel rounded-2xl p-4 sm:p-5 border border-white/10 space-y-4 shadow-xl">
         {/* Mode Toggle: Segmented control on mobile, tabs on desktop */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
-          <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/10 text-xs font-mono w-full sm:w-auto">
+          <div className="flex rounded-xl bg-slate-950/80 p-1 border border-white/10 text-xs font-mono w-full sm:w-auto overflow-x-auto no-scrollbar">
             {[
               { key: "ALL", label: "Unified Directory" },
               { key: "LOST", label: "Lost Items" },
@@ -356,7 +384,7 @@ function LostAndFoundDirectoryContent() {
                   setTypeFilter(t.key);
                   updateQueryParams({ type: t.key });
                 }}
-                className={`flex-1 sm:flex-initial sm:px-5 py-2 rounded-lg text-center font-bold transition-all ${
+                className={`flex-1 sm:flex-initial sm:px-5 px-3 py-2 whitespace-nowrap shrink-0 rounded-lg text-center font-bold transition-all ${
                   typeFilter === t.key
                     ? t.key === "LOST"
                       ? "bg-rose-500 text-slate-950 shadow-md shadow-rose-500/30"

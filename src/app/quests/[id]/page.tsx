@@ -16,8 +16,14 @@ import {
   Lock,
   AlertCircle,
   Loader2,
+  Trophy,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+function renderDifficultyStars(difficulty: any): string {
+  const d = typeof difficulty === "number" && !isNaN(difficulty) ? Math.min(5, Math.max(1, Math.round(difficulty))) : 2;
+  return "★".repeat(d) + "☆".repeat(Math.max(0, 5 - d));
+}
 
 export default function QuestBriefingPage() {
   const params = useParams();
@@ -153,7 +159,7 @@ export default function QuestBriefingPage() {
                 Resume Active Room ({investigation.progressPct}% Done) →
               </Link>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => handleStart(false)}
@@ -218,7 +224,7 @@ export default function QuestBriefingPage() {
         </div>
 
         {/* Rewards and Parameters */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 pt-2">
           <div className="rounded-xl bg-slate-950/60 border border-white/5 p-3.5 text-center">
             <div className="text-emerald-400 font-mono font-black text-lg">+{quest.xpReward}</div>
             <div className="text-[10px] font-mono uppercase text-slate-400">Hunter XP</div>
@@ -227,13 +233,20 @@ export default function QuestBriefingPage() {
             <div className="text-amber-400 font-mono font-black text-lg">+{quest.coinReward}</div>
             <div className="text-[10px] font-mono uppercase text-slate-400">Hunter Coins</div>
           </div>
+          <div className="rounded-xl bg-slate-950/60 border border-amber-500/30 p-3.5 text-center shadow-md">
+            <div className="text-amber-300 font-mono font-black text-lg flex items-center justify-center gap-1">
+              <Trophy className="w-4 h-4 text-amber-400" />
+              +{quest.trophyReward || (quest.difficulty ? quest.difficulty * 15 : 25)}
+            </div>
+            <div className="text-[10px] font-mono uppercase text-amber-400/90 font-bold">Trophies</div>
+          </div>
           <div className="rounded-xl bg-slate-950/60 border border-white/5 p-3.5 text-center">
             <div className="text-cyan-400 font-mono font-black text-lg">+{quest.squadXpReward}</div>
             <div className="text-[10px] font-mono uppercase text-slate-400">Squad XP</div>
           </div>
           <div className="rounded-xl bg-slate-950/60 border border-white/5 p-3.5 text-center">
             <div className="text-violet-400 font-mono font-black text-lg">
-              {"★".repeat(quest.difficulty)}
+              {renderDifficultyStars(quest.difficulty)}
             </div>
             <div className="text-[10px] font-mono uppercase text-slate-400">Difficulty</div>
           </div>

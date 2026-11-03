@@ -41,6 +41,16 @@ const nextConfig = {
         destination: "/lost-and-found/report-found",
         permanent: false,
       },
+      {
+        source: "/staff/intake",
+        destination: "/staff",
+        permanent: false,
+      },
+      {
+        source: "/admin/operations",
+        destination: "/admin",
+        permanent: false,
+      },
     ];
   },
   async headers() {

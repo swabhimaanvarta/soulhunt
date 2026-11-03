@@ -105,10 +105,16 @@ async function runResponsiveViewportSuite() {
     await page.setViewport({ width: 1440, height: 900 });
     await page.goto(`${BASE_URL}/login`, { waitUntil: "networkidle2", timeout: 20000 });
     await page.waitForSelector("#login-identifier", { timeout: 10000 });
+    await page.waitForSelector("#login-password", { timeout: 10000 });
     await page.type("#login-identifier", "admin@aiemgoa.ac.in");
-    await page.type("#login-password", "Hunter@123");
+    await page.type("#login-password", process.env.DEFAULT_ADMIN_PASSWORD || "Admin@123");
     await page.click('button[type="submit"]');
-    await new Promise((r) => setTimeout(r, 2500));
+    await page.waitForFunction(() => !window.location.pathname.includes("/login"), { timeout: 15000 });
+    const currentUrl = page.url();
+    if (currentUrl.includes("/login")) {
+      throw new Error(`Admin authentication failed: runner still on ${currentUrl}`);
+    }
+    console.log(`  🔑 Admin authenticated successfully. Current URL: ${currentUrl}`);
 
     const authTargets = [
       { path: "/dashboard", name: "dashboard_desktop", width: 1440, height: 900 },
