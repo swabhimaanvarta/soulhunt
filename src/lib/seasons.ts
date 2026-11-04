@@ -239,3 +239,4 @@ export function calculateSeasonPayout(trophies = 0): {
     tierTitle: tierInfo.title,
   };
 }
+

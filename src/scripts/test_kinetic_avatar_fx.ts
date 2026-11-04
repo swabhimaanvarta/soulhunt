@@ -79,3 +79,4 @@ runTest("Effect resolver executes deterministically in headless Node without win
 console.log("\n========================================================");
 console.log("🎉 ALL KINETIC AVATAR FX TESTS PASSED (100% VERIFIED)");
 console.log("========================================================\n");
+
