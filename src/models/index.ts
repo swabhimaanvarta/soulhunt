@@ -7,7 +7,8 @@ export type TrustTier =
   | "NEW_HUNTER"
   | "ACTIVE_HUNTER"
   | "TRUSTED_HUNTER"
-  | "ELITE_INVESTIGATOR";
+  | "ELITE_INVESTIGATOR"
+  | "TRUSTED_RECOVERER";
 
 export type ItemCategory =
   | "ELECTRONICS"
@@ -188,6 +189,10 @@ export interface IUser extends Document {
   passwordResetResendAfter?: Date;
   xp: number;
   level: number;
+  claimedLevelRewards: number[];
+  dailyStreak: number;
+  longestDailyStreak: number;
+  lastDailyCompletionDate?: string | null;
   rankTitle: string;
   coins: number;
   trustScore: number;
@@ -196,6 +201,7 @@ export interface IUser extends Document {
   equippedTitle: string;
   equippedFrame: string;
   equippedTheme: string;
+  equippedEffect?: string;
   ownedCosmetics: Types.ObjectId[];
   stats: {
     recoveriesCount: number;
@@ -220,6 +226,7 @@ export interface IUser extends Document {
   publicAttributionPreference?: "HANDLE" | "ANONYMOUS";
   featuredAchievementIds?: Types.ObjectId[];
   weeklyScore?: number;
+  trophies?: number;
   lastWeeklyReset?: Date;
   createdAt?: Date;
   updatedAt?: Date;
@@ -266,8 +273,13 @@ const UserSchema = new Schema<IUser>(
     passwordResetResendAfter: { type: Date },
     xp: { type: Number, default: 0, index: true },
     level: { type: Number, default: 1 },
+    claimedLevelRewards: { type: [Number], default: [] },
+    dailyStreak: { type: Number, default: 0 },
+    longestDailyStreak: { type: Number, default: 0 },
+    lastDailyCompletionDate: { type: String, default: null },
     rankTitle: { type: String, default: "Rookie Scout" },
     coins: { type: Number, default: 50 },
+    trophies: { type: Number, default: 0, min: 0, index: true },
     trustScore: { type: Number, default: 100, min: 0, max: 1000 },
     trustTier: {
       type: String,
@@ -277,6 +289,7 @@ const UserSchema = new Schema<IUser>(
         "ACTIVE_HUNTER",
         "TRUSTED_HUNTER",
         "ELITE_INVESTIGATOR",
+        "TRUSTED_RECOVERER",
       ],
       default: "NEW_HUNTER",
     },
@@ -284,6 +297,7 @@ const UserSchema = new Schema<IUser>(
     equippedTitle: { type: String, default: "Campus Pathfinder" },
     equippedFrame: { type: String, default: "frame-emerald-pulse" },
     equippedTheme: { type: String, default: "theme-obsidian-grid" },
+    equippedEffect: { type: String, default: "" },
     ownedCosmetics: [{ type: Schema.Types.ObjectId, ref: "Reward" }],
     stats: {
       recoveriesCount: { type: Number, default: 0 },
@@ -329,7 +343,7 @@ export interface ILostItem extends Document {
   lostAt: Date;
   approximateTimeRange?: string;
   photos: string[];
-  recoveryPreference: "HANDOVER_AT_SAFE_DESK" | "DIRECT_CAMPUS_MEETUP" | "MODERATOR_OFFICE";
+  recoveryPreference: "HANDOVER_AT_SAFE_DESK" | "DIRECT_CAMPUS_MEETUP" | "MODERATOR_OFFICE" | "DIRECT_CONTACT_MODERATED";
   convertToQuest: boolean;
   linkedQuestId?: Types.ObjectId | null;
   currentClaimId?: Types.ObjectId | null;
@@ -385,7 +399,7 @@ const LostItemSchema = new Schema<ILostItem>(
     blurredPhotoUrl: { type: String, default: "" },
     recoveryPreference: {
       type: String,
-      enum: ["HANDOVER_AT_SAFE_DESK", "DIRECT_CAMPUS_MEETUP", "MODERATOR_OFFICE"],
+      enum: ["HANDOVER_AT_SAFE_DESK", "DIRECT_CAMPUS_MEETUP", "MODERATOR_OFFICE", "DIRECT_CONTACT_MODERATED"],
       default: "HANDOVER_AT_SAFE_DESK",
     },
     rewardOffered: { type: Number, default: 0 },
@@ -631,6 +645,7 @@ export interface IQuest extends Document {
   unlockLocationAtStage: number;
   xpReward: number;
   coinReward: number;
+  trophyReward?: number;
   squadXpReward: number;
   finderBonusXp: number;
   maxCompletions: number;
@@ -699,6 +714,7 @@ const QuestSchema = new Schema<IQuest>(
     unlockLocationAtStage: { type: Number, default: 3 },
     xpReward: { type: Number, required: true },
     coinReward: { type: Number, required: true },
+    trophyReward: { type: Number, default: 25 },
     squadXpReward: { type: Number, default: 50 },
     finderBonusXp: { type: Number, default: 25 },
     maxCompletions: { type: Number, default: 1 },
@@ -880,7 +896,7 @@ const InvestigationSchema = new Schema<IInvestigation>(
         clueId: { type: Schema.Types.ObjectId, ref: "Clue", required: true },
         customClueText: { type: String, required: true },
         customExpectedAnswer: { type: String, required: true, select: false },
-        acceptableAnswers: { type: [String], default: [] },
+        acceptableAnswers: { type: [String], default: [], select: false },
         numericTolerance: { type: Number, default: 0 },
         options: [
           {
@@ -888,7 +904,7 @@ const InvestigationSchema = new Schema<IInvestigation>(
             text: { type: String, required: true },
           },
         ],
-        explanation: { type: String, default: "" },
+        explanation: { type: String, default: "", select: false },
       },
     ],
     solvedClues: [
@@ -947,6 +963,7 @@ export interface ISquad extends Document {
   leaderId: Types.ObjectId;
   squadXp: number;
   squadLevel: number;
+  trophies?: number;
   completedHuntsCount: number;
   memberCap: number;
   tags?: string[];
@@ -976,6 +993,7 @@ const SquadSchema = new Schema<ISquad>(
     minLevelRequired: { type: Number, default: 1, min: 1, max: 10 },
     leaderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     squadXp: { type: Number, default: 0, index: true },
+    trophies: { type: Number, default: 0, min: 0 },
     squadLevel: { type: Number, default: 1 },
     completedHuntsCount: { type: Number, default: 0 },
     memberCap: { type: Number, default: 8 },
@@ -1091,6 +1109,92 @@ SquadMessageSchema.index(
   { unique: true, partialFilterExpression: { requestId: { $type: "string" } } }
 );
 
+export interface ISquadHuntParticipant {
+  userId: Types.ObjectId;
+  displayName: string;
+  username: string;
+  avatarUrl?: string;
+  cluesSolvedCount: number;
+  isFinder: boolean;
+  trophiesAwarded: number;
+  xpAwarded: number;
+  coinsAwarded: number;
+}
+
+export interface ISquadHuntRecord extends Document {
+  squadId: Types.ObjectId;
+  questId: Types.ObjectId;
+  investigationId: Types.ObjectId;
+  questCode: string;
+  questTitle: string;
+  questType: QuestType | string;
+  difficulty: number;
+  status: "COMPLETED" | "FAILED" | "ABANDONED";
+  completedAt: Date;
+  startedAt?: Date | null;
+  durationSeconds?: number;
+  finisherUserId: Types.ObjectId;
+  finisherName: string;
+  participatingMembers: ISquadHuntParticipant[];
+  squadRewards: {
+    squadXp: number;
+    squadTrophies: number;
+  };
+  totalCluesCount: number;
+  evidencePinsCount: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const SquadHuntRecordSchema = new Schema<ISquadHuntRecord>(
+  {
+    squadId: { type: Schema.Types.ObjectId, ref: "Squad", required: true, index: true },
+    questId: { type: Schema.Types.ObjectId, ref: "Quest", required: true, index: true },
+    investigationId: { type: Schema.Types.ObjectId, ref: "Investigation", required: true, index: true },
+    questCode: { type: String, required: true },
+    questTitle: { type: String, required: true },
+    questType: { type: String, required: true },
+    difficulty: { type: Number, required: true, default: 1 },
+    status: {
+      type: String,
+      enum: ["COMPLETED", "FAILED", "ABANDONED"],
+      default: "COMPLETED",
+      index: true,
+    },
+    completedAt: { type: Date, default: Date.now, index: true },
+    startedAt: { type: Date, default: null },
+    durationSeconds: { type: Number, default: 0 },
+    finisherUserId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    finisherName: { type: String, required: true },
+    participatingMembers: [
+      {
+        userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+        displayName: { type: String, required: true },
+        username: { type: String, required: true },
+        avatarUrl: { type: String, default: "" },
+        cluesSolvedCount: { type: Number, default: 0 },
+        isFinder: { type: Boolean, default: false },
+        trophiesAwarded: { type: Number, default: 0 },
+        xpAwarded: { type: Number, default: 0 },
+        coinsAwarded: { type: Number, default: 0 },
+      },
+    ],
+    squadRewards: {
+      squadXp: { type: Number, required: true },
+      squadTrophies: { type: Number, required: true },
+    },
+    totalCluesCount: { type: Number, default: 0 },
+    evidencePinsCount: { type: Number, default: 0 },
+  },
+  { timestamps: true }
+);
+
+SquadHuntRecordSchema.index({ squadId: 1, investigationId: 1 }, { unique: true });
+SquadHuntRecordSchema.index({ squadId: 1, completedAt: -1 });
+
+export const SquadHuntRecord: Model<ISquadHuntRecord> =
+  mongoose.models.SquadHuntRecord || mongoose.model<ISquadHuntRecord>("SquadHuntRecord", SquadHuntRecordSchema);
+
 export interface IAchievement extends Document {
   code: string;
   title: string;
@@ -1171,7 +1275,7 @@ export interface IReward extends Document {
   name?: string;
   title?: string;
   description: string;
-  type: "FRAME" | "TITLE" | "THEME" | "BADGE" | "CANTEEN_COUPON" | "CAMPUS_PERK";
+  type: "FRAME" | "TITLE" | "THEME" | "BADGE" | "CANTEEN_COUPON" | "CAMPUS_PERK" | "AVATAR" | "BANNER" | "BANNER_FRAME" | "EFFECT" | "DECORATION";
   coinCost: number;
   previewAsset?: string;
   minLevelRequired: number;
@@ -1188,7 +1292,7 @@ const RewardSchema = new Schema<IReward>(
     description: { type: String, required: true },
     type: {
       type: String,
-      enum: ["FRAME", "TITLE", "THEME", "BADGE", "CANTEEN_COUPON", "CAMPUS_PERK"],
+      enum: ["FRAME", "TITLE", "THEME", "BADGE", "CANTEEN_COUPON", "CAMPUS_PERK", "AVATAR", "BANNER", "BANNER_FRAME", "EFFECT", "DECORATION"],
       required: true,
     },
     coinCost: { type: Number, required: true, min: 0 },
@@ -1206,10 +1310,11 @@ export interface ITransaction extends Document {
   squadId?: Types.ObjectId | null;
   deltaXp: number;
   deltaCoins: number;
+  deltaTrophies?: number;
   deltaTrust: number;
   reason: string;
-  referenceType: "QUEST" | "RECOVERY" | "ACHIEVEMENT" | "SHOP_PURCHASE" | "REWARD_PURCHASE" | "HINT_UNLOCK" | "ADMIN_ADJUST";
-  referenceId?: Types.ObjectId | null;
+  referenceType: "QUEST" | "RECOVERY" | "ACHIEVEMENT" | "SHOP_PURCHASE" | "REWARD_PURCHASE" | "HINT_UNLOCK" | "ADMIN_ADJUST" | "DAILY_QUEST";
+  referenceId?: Types.ObjectId | string | null;
   counterpartyUserId?: Types.ObjectId | null;
   approvedBy?: Types.ObjectId | null;
   idempotencyKey?: string;
@@ -1222,6 +1327,7 @@ const TransactionSchema = new Schema<ITransaction>(
     squadId: { type: Schema.Types.ObjectId, ref: "Squad", default: null },
     deltaXp: { type: Number, default: 0 },
     deltaCoins: { type: Number, default: 0 },
+    deltaTrophies: { type: Number, default: 0 },
     deltaTrust: { type: Number, default: 0 },
     reason: { type: String, required: true },
     referenceType: {
@@ -1234,10 +1340,11 @@ const TransactionSchema = new Schema<ITransaction>(
         "REWARD_PURCHASE",
         "HINT_UNLOCK",
         "ADMIN_ADJUST",
+        "DAILY_QUEST",
       ],
       required: true,
     },
-    referenceId: { type: Schema.Types.ObjectId, default: null },
+    referenceId: { type: Schema.Types.Mixed, default: null },
     counterpartyUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
     approvedBy: { type: Schema.Types.ObjectId, ref: "User", default: null },
     idempotencyKey: { type: String, unique: true, sparse: true },
@@ -1662,6 +1769,41 @@ CourseCurriculumSchema.index({ department: 1, semester: 1 });
 
 export const CourseCurriculum: Model<ICourseCurriculum> =
   mongoose.models.CourseCurriculum || mongoose.model<ICourseCurriculum>("CourseCurriculum", CourseCurriculumSchema);
+
+export interface IUserDailyQuest extends Document {
+  userId: Types.ObjectId;
+  dateKey: string;
+  questKey: string;
+  targetCount: number;
+  currentProgress: number;
+  isCompleted: boolean;
+  isClaimed: boolean;
+  completedAt?: Date;
+  claimedAt?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+const UserDailyQuestSchema = new Schema<IUserDailyQuest>(
+  {
+    userId: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    dateKey: { type: String, required: true },
+    questKey: { type: String, required: true },
+    targetCount: { type: Number, required: true },
+    currentProgress: { type: Number, default: 0 },
+    isCompleted: { type: Boolean, default: false },
+    isClaimed: { type: Boolean, default: false },
+    completedAt: { type: Date },
+    claimedAt: { type: Date },
+  },
+  { timestamps: true }
+);
+
+UserDailyQuestSchema.index({ userId: 1, dateKey: 1, questKey: 1 }, { unique: true });
+
+export const UserDailyQuest: Model<IUserDailyQuest> =
+  mongoose.models.UserDailyQuest || mongoose.model<IUserDailyQuest>("UserDailyQuest", UserDailyQuestSchema);
+
 
 
 

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { User, LostItem, FoundItem, ClaimRequest, UserAchievement, Squad } from "@/models";
+import { User, LostItem, FoundItem, ClaimRequest, UserAchievement, Squad, Reward } from "@/models";
 import { logAuditEvent } from "@/lib/audit";
+import { isStarterCosmetic, isCosmeticOwned } from "@/lib/cosmetics";
 
 export async function GET(req: NextRequest) {
   try {
@@ -31,6 +32,15 @@ export async function GET(req: NextRequest) {
 
     // Privacy check: If user made profile private, return strictly masked handle and avatar to non-owners/non-staff
     if (!isOwnProfile && !isAdmin && targetUser.isProfilePublic === false) {
+      const isAnon = targetUser.identityMode === "ANONYMOUS";
+      // Private profiles MUST return masked handle only (@username or Anonymous Hunter), never real displayName
+      const maskedDisplayName = isAnon ? "Anonymous Hunter" : `@${targetUser.username}`;
+
+      const avatarPreset = isAnon ? "recon" : (targetUser.avatarPreset || "recon");
+      const avatarUrl = isAnon
+        ? "/avatars/recon.png"
+        : (targetUser.avatarUrl || `/avatars/${avatarPreset}.png`);
+
       return NextResponse.json({
         success: true,
         isOwnProfile: false,
@@ -38,10 +48,10 @@ export async function GET(req: NextRequest) {
         message: "This hunter's profile is set to private.",
         profile: {
           username: targetUser.username,
-          displayName: targetUser.identityMode === "PUBLIC" ? targetUser.displayName : `@${targetUser.username}`,
-          avatar: targetUser.avatarUrl || `/avatars/${targetUser.avatarPreset || "recon"}.png`,
-          avatarUrl: targetUser.avatarUrl || `/avatars/${targetUser.avatarPreset || "recon"}.png`,
-          avatarPreset: targetUser.avatarPreset || "recon",
+          displayName: maskedDisplayName,
+          avatar: avatarUrl,
+          avatarUrl: avatarUrl,
+          avatarPreset: avatarPreset,
           isProfilePublic: false,
         },
         activities: {
@@ -62,71 +72,122 @@ export async function GET(req: NextRequest) {
     }
 
     // Personal report history: Only exposed to profile owner or staff
+    // Privacy invariant: Coarse campus location only, fine-grained spotDetails and internal notes stripped
     let lostItems: any[] = [];
     let foundItems: any[] = [];
     let claims: any[] = [];
 
     if (isOwnProfile || isAdmin) {
       lostItems = await LostItem.find({ reporterId: targetUser._id })
-        .select("title category status lostAt spotDetails photos createdAt")
+        .populate("lastKnownLocationId", "name code")
+        .select("title category status lostAt photos createdAt lastKnownLocationId")
         .sort({ createdAt: -1 })
-        .limit(10)
+        .limit(50)
         .lean();
 
       foundItems = await FoundItem.find({ finderId: targetUser._id })
-        .select("shortTitle title category custodyStatus status foundAt spotDetails blurredPhotoUrl createdAt")
+        .populate("foundLocationId", "name code")
+        .populate("currentCustodyLocationId", "name code isSafeDesk")
+        .select("shortTitle title category custodyStatus status foundAt blurredPhotoUrl createdAt foundLocationId currentCustodyLocationId")
         .sort({ createdAt: -1 })
-        .limit(10)
+        .limit(50)
         .lean();
 
       claims = await ClaimRequest.find({ claimantId: targetUser._id })
         .populate("itemId", "title shortTitle category status")
         .select("itemType itemId status createdAt verifiedAt rejectionReason")
         .sort({ createdAt: -1 })
-        .limit(10)
+        .limit(50)
         .lean();
     }
 
-    // Unlocked achievements
-    const userAchievements = await UserAchievement.find({ userId: targetUser._id, isUnlocked: true })
+    // Achievements: owner gets unlocked + in-progress; visitor gets unlocked only
+    const achievementFilter: any = { userId: targetUser._id };
+    if (!isOwnProfile && !isAdmin) {
+      achievementFilter.isUnlocked = true;
+    }
+    const userAchievements = await UserAchievement.find(achievementFilter)
       .populate("achievementId")
-      .sort({ unlockedAt: -1 })
-      .limit(20)
+      .sort({ isUnlocked: -1, unlockedAt: -1, progress: -1 })
+      .limit(50)
       .lean();
 
-    // Invariant: Non-owner public display name resolves by identityMode (PUBLIC vs PSEUDONYMOUS)
-    const publicDisplayName =
-      targetUser.identityMode === "PUBLIC" || isOwnProfile || isAdmin
+    // Invariant: Non-owner public display name and avatar resolves by identityMode
+    const isAnon = targetUser.identityMode === "ANONYMOUS";
+    const isPublic = targetUser.identityMode === "PUBLIC";
+
+    const resolvedDisplayName =
+      isOwnProfile || isAdmin
         ? targetUser.displayName
+        : isPublic
+        ? targetUser.displayName
+        : isAnon
+        ? "Anonymous Hunter"
         : `@${targetUser.username}`;
 
-    const profileData = {
+    const resolvedAvatarPreset =
+      !isOwnProfile && !isAdmin && isAnon
+        ? "recon"
+        : (targetUser.avatarPreset || "recon");
+
+    const resolvedAvatarUrl =
+      !isOwnProfile && !isAdmin && isAnon
+        ? "/avatars/recon.png"
+        : (targetUser.avatarUrl || `/avatars/${resolvedAvatarPreset}.png`);
+
+    // Invariant: Leaderboard privacy controls level, xp, and rankTitle visibility
+    const isLeaderboardPublic = targetUser.isLeaderboardPublic !== false;
+    const canSeeLeaderboard = isOwnProfile || isAdmin || isLeaderboardPublic;
+
+    // Invariant: Aggregated coarse counts from stats ONLY IF both isProfilePublic and isLeaderboardPublic
+    let stats: Record<string, any> = {};
+    if (isOwnProfile || isAdmin) {
+      stats = targetUser.stats || {};
+    } else if (targetUser.isProfilePublic !== false && isLeaderboardPublic) {
+      stats = {
+        recoveriesCount: targetUser.stats?.recoveriesCount || 0,
+        safeDeskDepositsCount: targetUser.stats?.safeDeskDepositsCount || 0,
+        questsCompleted: targetUser.stats?.questsCompleted || 0,
+        cluesSolved: targetUser.stats?.cluesSolved || 0,
+      };
+    } else {
+      stats = {};
+    }
+
+    const profileData: any = {
       _id: targetUser._id.toString(),
       username: targetUser.username,
-      displayName: publicDisplayName,
-      avatarUrl: targetUser.avatarUrl,
-      avatarPreset: targetUser.avatarPreset || "recon",
+      displayName: resolvedDisplayName,
+      avatarUrl: resolvedAvatarUrl,
+      avatarPreset: resolvedAvatarPreset,
       bio: targetUser.bio || "",
       department: targetUser.department || "Engineering",
       yearOfStudy: targetUser.yearOfStudy || 1,
-      role: targetUser.role,
-      level: targetUser.level,
-      rankTitle: targetUser.rankTitle,
-      xp: targetUser.xp,
+      rankTitle: canSeeLeaderboard ? (targetUser.rankTitle || "Campus Seeker") : "Unranked Operative",
+      ...(canSeeLeaderboard
+        ? {
+            level: targetUser.level ?? 1,
+            xp: targetUser.xp ?? 0,
+            trophies: targetUser.trophies ?? targetUser.weeklyScore ?? 0,
+            weeklyScore: targetUser.weeklyScore ?? 0,
+          }
+        : {}),
       equippedTitle: targetUser.equippedTitle || "",
       equippedFrame: targetUser.equippedFrame || "frame-emerald-pulse",
       equippedTheme: targetUser.equippedTheme || "theme-obsidian-grid",
-      stats: targetUser.stats || {},
+      equippedEffect: targetUser.equippedEffect || "",
+      stats,
       squad,
       createdAt: targetUser.createdAt,
       isProfilePublic: targetUser.isProfilePublic !== false,
-      isLeaderboardPublic: targetUser.isLeaderboardPublic !== false,
+      isLeaderboardPublic,
       identityMode: targetUser.identityMode || "PSEUDONYMOUS",
       publicAttributionPreference: targetUser.publicAttributionPreference || "HANDLE",
       featuredAchievementIds: targetUser.featuredAchievementIds || [],
       // Private fields and internal trust signals strictly exposed to owner or admin ONLY
       ...(isOwnProfile || isAdmin
         ? {
+            role: targetUser.role,
             trustTier: targetUser.trustTier,
             trustScore: targetUser.trustScore,
             email: targetUser.email,
@@ -237,7 +298,17 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    const BUILTIN_AVATAR_PRESETS = ["recon", "sleuth", "vanguard", "sentinel", "shadow", "archivist"];
+    const BUILTIN_AVATAR_PRESETS = [
+      "recon",
+      "scout",
+      "infiltrator",
+      "tactician",
+      "sleuth",
+      "vanguard",
+      "sentinel",
+      "shadow",
+      "archivist",
+    ];
     if (body.avatarPreset !== undefined) {
       const preset = String(body.avatarPreset).trim().toLowerCase();
       if (!BUILTIN_AVATAR_PRESETS.includes(preset)) {
@@ -274,16 +345,135 @@ export async function PUT(req: NextRequest) {
       user.avatarUrl = urlStr;
     }
 
+    // Cosmetic Equip Ownership Validation
+    const hasCosmeticEquip =
+      body.equippedTitle !== undefined ||
+      body.equippedFrame !== undefined ||
+      body.equippedTheme !== undefined ||
+      body.equippedBanner !== undefined ||
+      body.equippedEffect !== undefined ||
+      body.equippedDecoration !== undefined;
+
+    let ownedRewards: any[] = [];
+    if (hasCosmeticEquip && Array.isArray(user.ownedCosmetics) && user.ownedCosmetics.length > 0) {
+      const validRewardIds = user.ownedCosmetics.filter((id: any) => {
+        const idStr = id?.toString ? id.toString() : String(id);
+        return /^[0-9a-fA-F]{24}$/.test(idStr);
+      });
+      if (validRewardIds.length > 0) {
+        ownedRewards = await Reward.find({ _id: { $in: validRewardIds } }).lean();
+      }
+    }
+
+    const isCosmeticEligible = (val: string): boolean => {
+      const cleanVal = String(val).trim();
+      if (!cleanVal) return true;
+
+      // a) Starter cosmetics: zero paywall, always allowed
+      if (isStarterCosmetic(cleanVal)) return true;
+
+      // b) Present in user.ownedCosmetics (matching by string id or Reward ObjectId)
+      if (
+        user.ownedCosmetics?.some((id: any) => {
+          const idStr = id?.toString ? id.toString() : String(id);
+          return idStr === cleanVal || idStr.toLowerCase() === cleanVal.toLowerCase();
+        })
+      ) {
+        return true;
+      }
+
+      // c) Matching Reward in user's owned rewards (by ObjectId, code, title, name, metadata.value)
+      if (
+        ownedRewards.some((r: any) => {
+          const rId = r._id?.toString() || "";
+          const rVal = r.metadata?.value || "";
+          const rCode = r.code || "";
+          const rTitle = r.title || "";
+          const rName = r.name || "";
+          return (
+            rId === cleanVal ||
+            (rVal && rVal.toLowerCase() === cleanVal.toLowerCase()) ||
+            (rCode && rCode.toLowerCase() === cleanVal.toLowerCase()) ||
+            (rTitle && rTitle.toLowerCase() === cleanVal.toLowerCase()) ||
+            (rName && rName.toLowerCase() === cleanVal.toLowerCase())
+          );
+        })
+      ) {
+        return true;
+      }
+
+      // d) Level / achievement unlocked in catalogue
+      if (isCosmeticOwned(user, cleanVal, user.level)) {
+        return true;
+      }
+
+      return false;
+    };
+
     if (body.equippedTitle !== undefined) {
-      user.equippedTitle = String(body.equippedTitle).trim().slice(0, 60);
+      const titleVal = String(body.equippedTitle).trim();
+      if (!isCosmeticEligible(titleVal)) {
+        return NextResponse.json(
+          { success: false, error: "COSMETIC_NOT_OWNED", message: "Cannot equip an unowned cosmetic item." },
+          { status: 403 }
+        );
+      }
+      user.equippedTitle = titleVal.slice(0, 60);
     }
 
     if (body.equippedFrame !== undefined) {
-      user.equippedFrame = String(body.equippedFrame).trim().slice(0, 80);
+      const frameVal = String(body.equippedFrame).trim();
+      if (!isCosmeticEligible(frameVal)) {
+        return NextResponse.json(
+          { success: false, error: "COSMETIC_NOT_OWNED", message: "Cannot equip an unowned cosmetic item." },
+          { status: 403 }
+        );
+      }
+      const matchedReward = ownedRewards.find((r: any) => r._id?.toString() === frameVal);
+      user.equippedFrame = (matchedReward?.metadata?.value || frameVal).slice(0, 80);
     }
 
     if (body.equippedTheme !== undefined) {
-      user.equippedTheme = String(body.equippedTheme).trim().slice(0, 80);
+      const themeVal = String(body.equippedTheme).trim();
+      if (!isCosmeticEligible(themeVal)) {
+        return NextResponse.json(
+          { success: false, error: "COSMETIC_NOT_OWNED", message: "Cannot equip an unowned cosmetic item." },
+          { status: 403 }
+        );
+      }
+      const matchedReward = ownedRewards.find((r: any) => r._id?.toString() === themeVal);
+      user.equippedTheme = (matchedReward?.metadata?.value || themeVal).slice(0, 80);
+    }
+
+    if (body.equippedBanner !== undefined) {
+      const bannerVal = String(body.equippedBanner).trim();
+      if (!isCosmeticEligible(bannerVal)) {
+        return NextResponse.json(
+          { success: false, error: "COSMETIC_NOT_OWNED", message: "Cannot equip an unowned cosmetic item." },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (body.equippedDecoration !== undefined) {
+      const decorVal = String(body.equippedDecoration).trim();
+      if (!isCosmeticEligible(decorVal)) {
+        return NextResponse.json(
+          { success: false, error: "COSMETIC_NOT_OWNED", message: "Cannot equip an unowned cosmetic item." },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (body.equippedEffect !== undefined) {
+      const effectVal = String(body.equippedEffect).trim();
+      if (effectVal && !isCosmeticEligible(effectVal)) {
+        return NextResponse.json(
+          { success: false, error: "COSMETIC_NOT_OWNED", message: "Cannot equip an unowned cosmetic item." },
+          { status: 403 }
+        );
+      }
+      user.equippedEffect = effectVal.slice(0, 80);
     }
 
     if (body.isProfilePublic !== undefined) {
@@ -306,6 +496,11 @@ export async function PUT(req: NextRequest) {
       user.featuredAchievementIds = body.featuredAchievementIds
         .filter((id: any) => typeof id === "string" && /^[0-9a-fA-F]{24}$/.test(id))
         .slice(0, 3);
+    }
+
+    // Normalize legacy trust tier if present
+    if ((user as any).trustTier === "TRUSTED_RECOVERER") {
+      user.trustTier = "TRUSTED_HUNTER";
     }
 
     await user.save();
@@ -352,6 +547,7 @@ export async function PUT(req: NextRequest) {
         equippedTitle: user.equippedTitle,
         equippedFrame: user.equippedFrame,
         equippedTheme: user.equippedTheme,
+        equippedEffect: user.equippedEffect || "",
         level: user.level,
         rankTitle: user.rankTitle,
         coins: user.coins,
