@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { sfx } from "@/lib/audio/sfx";
+import LiveTelemetryBar from "@/components/dashboard/LiveTelemetryBar";
 
 interface DailyQuestData {
   dateKey: string;
@@ -259,6 +260,9 @@ export default function QuestBoardPage() {
           Turn Lost Item into Quest
         </Link>
       </div>
+
+      {/* Live Campus Telemetry (Rush Hour Recon & Tactical Syndicate Weekend Multipliers) */}
+      <LiveTelemetryBar />
 
       {/* SECTION: Prominent Daily Quests Board (Anchored to Asia/Kolkata IST Midnight Reset) */}
       <div className="rounded-3xl border border-white/10 bg-slate-900/80 backdrop-blur-xl p-4 sm:p-7 shadow-2xl relative overflow-hidden">
