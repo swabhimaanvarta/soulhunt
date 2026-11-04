@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -18,8 +18,47 @@ import {
   Zap,
   BookmarkCheck,
   RotateCcw,
+  Clock,
+  Flame,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { sfx } from "@/lib/audio/sfx";
+
+interface DailyQuestData {
+  dateKey: string;
+  resetAt: string;
+  secondsRemaining: number;
+  quests: Array<{
+    questKey: string;
+    title: string;
+    description: string;
+    targetCount: number;
+    currentProgress: number;
+    isCompleted: boolean;
+    isClaimed: boolean;
+    xpReward?: number;
+    rewardXp?: number;
+    coinReward?: number;
+    rewardCoins?: number;
+    category?: string;
+  }>;
+  dailyStreak: number;
+  longestDailyStreak: number;
+}
+
+function formatCountdown(sec: number): string {
+  if (sec <= 0) return "00h 00m 00s";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return `${String(h).padStart(2, "0")}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+}
+
+function renderDifficultyStars(difficulty: any): string {
+  const d = typeof difficulty === "number" && !isNaN(difficulty) ? Math.min(5, Math.max(1, Math.round(difficulty))) : 2;
+  return "★".repeat(d) + "☆".repeat(Math.max(0, 5 - d));
+}
 
 export default function QuestBoardPage() {
   const router = useRouter();
@@ -30,6 +69,12 @@ export default function QuestBoardPage() {
   const [statusTab, setStatusTab] = useState<"AVAILABLE" | "COMPLETED">("AVAILABLE");
   const [startingQuestId, setStartingQuestId] = useState<string | null>(null);
 
+  // Daily Quests Board state
+  const [dailyData, setDailyData] = useState<DailyQuestData | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+  const [secondsRemaining, setSecondsRemaining] = useState<number | null>(null);
+  const [claimingKey, setClaimingKey] = useState<string | null>(null);
+
   const questTypes = [
     { key: "ALL", label: "All Types" },
     { key: "INVESTIGATION", label: "Lost Item Investigations" },
@@ -38,7 +83,7 @@ export default function QuestBoardPage() {
     { key: "QUICK_FIND", label: "Quick Finds" },
   ];
 
-  const fetchQuests = async () => {
+  const fetchQuests = useCallback(async () => {
     setLoading(true);
     try {
       const url = filterType === "ALL" ? "/api/quests" : `/api/quests?type=${filterType}`;
@@ -52,14 +97,89 @@ export default function QuestBoardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterType]);
 
   useEffect(() => {
     setMounted(true);
     fetchQuests();
-  }, [filterType]);
+  }, [fetchQuests]);
 
   const { toast } = useToast();
+
+  const fetchDailyQuests = useCallback(async () => {
+    try {
+      const res = await fetch("/api/quests/daily");
+      const json = await res.json();
+      if (json.success) {
+        setDailyData(json);
+        if (typeof json.secondsRemaining === "number") {
+          setSecondsRemaining(json.secondsRemaining);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch daily quests:", err);
+    } finally {
+      setDailyLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDailyQuests();
+  }, [fetchDailyQuests]);
+
+  // Real-time countdown timer to IST midnight reset
+  useEffect(() => {
+    if (secondsRemaining === null || secondsRemaining <= 0) return;
+    const interval = setInterval(() => {
+      setSecondsRemaining((prev) => {
+        if (prev === null || prev <= 1) {
+          fetchDailyQuests();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [secondsRemaining, fetchDailyQuests]);
+
+  const handleClaimDaily = async (questKey: string) => {
+    if (!dailyData || claimingKey) return;
+    setClaimingKey(questKey);
+    try {
+      const res = await fetch("/api/quests/daily", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questKey,
+          dateKey: dailyData.dateKey,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        sfx.playCoinCascade(6);
+        toast({
+          title: "Daily Objective Completed!",
+          description: `Reward claimed: +${json.xpAwarded} XP and +${json.coinsAwarded} Hunter Coins!`,
+          variant: "success",
+        });
+        fetchDailyQuests();
+      } else {
+        toast({
+          title: "Reward Claim Failed",
+          description: json.error?.message || json.message || "Unable to claim objective reward.",
+          variant: "destructive",
+        });
+      }
+    } catch (e: any) {
+      toast({
+        title: "Connection Error",
+        description: e.message || "Failed to submit claim.",
+        variant: "destructive",
+      });
+    } finally {
+      setClaimingKey(null);
+    }
+  };
 
   const handleStartQuest = async (questId: string, asSquad: boolean = false) => {
     setStartingQuestId(questId);
@@ -111,7 +231,7 @@ export default function QuestBoardPage() {
   const nextRecommendedQuest = availableQuests[0] || null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28 md:pb-8 space-y-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28 md:pb-8 space-y-8 overflow-x-hidden w-full">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div className="space-y-1">
@@ -140,6 +260,187 @@ export default function QuestBoardPage() {
         </Link>
       </div>
 
+      {/* SECTION: Prominent Daily Quests Board (Anchored to Asia/Kolkata IST Midnight Reset) */}
+      <div className="rounded-3xl border border-white/10 bg-slate-900/80 backdrop-blur-xl p-4 sm:p-7 shadow-2xl relative overflow-hidden">
+        {/* Glow corner accents */}
+        <div className="pointer-events-none absolute -top-12 -right-12 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-12 -left-12 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl" />
+
+        {/* Board Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded text-[10px] font-mono uppercase font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                <Flame className="w-3.5 h-3.5 text-amber-400" />
+                DAILY RECON DIRECTIVE
+              </span>
+              <span className="text-[11px] font-mono text-slate-400">
+                Goa Campus Timezone: Asia/Kolkata (IST)
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+              Daily Quests & Streak Operations
+            </h2>
+            <p className="text-xs text-slate-400 font-mono">
+              Complete rotating field objectives every 24 hours to build consecutive-day streaks and claim bonus XP and Hunter Coins.
+            </p>
+          </div>
+
+          {/* Countdown & Streak Pills */}
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Real-time IST Midnight Countdown Timer */}
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950 border border-cyan-500/30 text-cyan-300 font-mono text-xs shadow-md">
+              <Clock className="w-4 h-4 text-cyan-400 animate-pulse" />
+              <div>
+                <span className="text-[9px] text-slate-400 block uppercase leading-none">Midnight Reset In</span>
+                <span className="font-bold text-cyan-200">
+                  {secondsRemaining !== null ? formatCountdown(secondsRemaining) : "Calculating..."}
+                </span>
+              </div>
+            </div>
+
+            {/* Streak Counters */}
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950 border border-amber-500/30 text-amber-300 font-mono text-xs shadow-md">
+              <Flame className="w-4 h-4 text-amber-400" />
+              <div>
+                <span className="text-[9px] text-slate-400 block uppercase leading-none">Current Streak</span>
+                <span className="font-bold text-amber-300">
+                  {dailyData?.dailyStreak ?? 0} {dailyData?.dailyStreak === 1 ? "Day" : "Days"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-950 border border-white/10 text-slate-300 font-mono text-xs shadow-md">
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <div>
+                <span className="text-[9px] text-slate-400 block uppercase leading-none">Longest Streak</span>
+                <span className="font-bold text-white">
+                  {dailyData?.longestDailyStreak ?? 0} {dailyData?.longestDailyStreak === 1 ? "Day" : "Days"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Objectives Content */}
+        {dailyLoading ? (
+          <div className="py-12 flex flex-col items-center justify-center font-mono text-xs text-slate-400 space-y-2">
+            <Loader2 className="w-6 h-6 animate-spin text-emerald-400" />
+            <span>SYNCHRONIZING CAMPUS DAILY DIRECTIVES (IST)...</span>
+          </div>
+        ) : !dailyData || dailyData.quests.length === 0 ? (
+          <div className="py-8 text-center font-mono text-xs text-slate-400">
+            No active daily directives found for this rotation cycle.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-5">
+            {dailyData.quests.map((quest) => {
+              const xp = quest.xpReward ?? quest.rewardXp ?? 0;
+              const coins = quest.coinReward ?? quest.rewardCoins ?? 0;
+              const pct = Math.min(100, Math.round((quest.currentProgress / (quest.targetCount || 1)) * 100));
+              const isClaiming = claimingKey === quest.questKey;
+
+              return (
+                <div
+                  key={quest.questKey}
+                  className={`rounded-2xl p-4 border transition-all flex flex-col justify-between space-y-3.5 relative overflow-hidden ${
+                    quest.isClaimed
+                      ? "bg-slate-950/60 border-white/5 opacity-80"
+                      : quest.isCompleted
+                      ? "bg-gradient-to-br from-slate-900 to-amber-950/30 border-amber-500/40 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500/20"
+                      : "bg-slate-950/80 border-white/10 hover:border-white/20"
+                  }`}
+                >
+                  <div className="space-y-2">
+                    {/* Header: Title and Reward Pills */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">
+                          DAILY OBJECTIVE
+                        </span>
+                        <h4 className="text-sm font-bold text-white">
+                          {quest.title}
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0 font-mono text-[11px] font-bold">
+                        <span className="text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          +{xp} XP
+                        </span>
+                        <span className="text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 flex items-center gap-1">
+                          <Coins className="w-3 h-3" />
+                          {coins}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <p className="text-xs text-slate-400 font-mono leading-relaxed">
+                      {quest.description}
+                    </p>
+                  </div>
+
+                  {/* Progress Meter & Claim Section */}
+                  <div className="space-y-2.5 pt-2 border-t border-white/5">
+                    <div className="flex items-center justify-between text-[11px] font-mono">
+                      <span className="text-slate-400">Progress</span>
+                      <span className={quest.isCompleted ? "text-emerald-400 font-bold" : "text-slate-300"}>
+                        {quest.currentProgress} / {quest.targetCount} ({pct}%)
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          quest.isCompleted
+                            ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                            : "bg-emerald-500/70"
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    {/* Claim Button / Status Badge */}
+                    <div className="pt-1">
+                      {quest.isClaimed ? (
+                        <div className="w-full py-2 rounded-xl bg-slate-900 border border-white/5 text-emerald-400 font-mono text-xs font-bold flex items-center justify-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>Claimed</span>
+                        </div>
+                      ) : quest.isCompleted ? (
+                        <button
+                          type="button"
+                          disabled={isClaiming}
+                          onClick={() => handleClaimDaily(quest.questKey)}
+                          className="w-full py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-slate-950 font-mono font-bold text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {isClaiming ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Claiming Bounty...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Claim Daily Reward</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <div className="w-full py-2 rounded-xl bg-slate-950 border border-white/5 text-slate-500 font-mono text-xs flex items-center justify-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>In Progress</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Next Recommended Mission Banner (If user has completed at least 1 quest and has another available) */}
       {completedQuests.length > 0 && nextRecommendedQuest && (
         <div className="rounded-2xl p-5 border border-cyan-500/30 bg-gradient-to-r from-cyan-950/40 via-slate-900/90 to-emerald-950/40 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_0_25px_rgba(6,182,212,0.1)]">
@@ -152,8 +453,12 @@ export default function QuestBoardPage() {
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold bg-cyan-500/20 text-cyan-300">
                   NEXT RECOMMENDED ASSIGNMENT
                 </span>
-                <span className="text-xs font-mono text-amber-400 font-bold">
-                  +{nextRecommendedQuest.xpReward} XP • +{nextRecommendedQuest.coinReward} Coins
+                <span className="text-xs font-mono text-amber-400 font-bold flex items-center gap-1.5 flex-wrap">
+                  <span>+{nextRecommendedQuest.xpReward} XP</span>
+                  <span className="text-slate-600">•</span>
+                  <span>+{nextRecommendedQuest.coinReward} Coins</span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-amber-300">+{nextRecommendedQuest.trophyReward || (nextRecommendedQuest.difficulty ? nextRecommendedQuest.difficulty * 15 : 25)} 🏆 Trophies</span>
                 </span>
               </div>
               <h3 className="text-base font-bold text-white">
@@ -320,7 +625,7 @@ export default function QuestBoardPage() {
                     <div className="flex items-center justify-between text-slate-400 text-[11px]">
                       <span>Stages: {q.totalStages || 3} Clues</span>
                       <span className="text-amber-400">
-                        Difficulty: {"★".repeat(q.difficulty)}{"☆".repeat(Math.max(0, 5 - q.difficulty))}
+                        Difficulty: {renderDifficultyStars(q.difficulty)}
                       </span>
                     </div>
 
@@ -328,6 +633,7 @@ export default function QuestBoardPage() {
                     <div className="flex flex-wrap items-center gap-3 pt-2 text-[11px] text-slate-200">
                       <span className="text-emerald-400 font-bold">⭐ +{q.xpReward} XP</span>
                       <span className="text-amber-400 font-bold">🪙 +{q.coinReward} Coins</span>
+                      <span className="text-amber-300 font-bold">🏆 +{q.trophyReward || (q.difficulty ? q.difficulty * 15 : 25)} Trophies</span>
                       {q.squadXpReward > 0 && (
                         <span className="text-cyan-400 font-bold">🛡️ +{q.squadXpReward} Squad XP</span>
                       )}

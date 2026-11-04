@@ -28,6 +28,7 @@ import {
   CosmeticItem,
   CosmeticCategory,
 } from "@/lib/cosmetics";
+import { sfx } from "@/lib/audio/sfx";
 import {
   ProfileUser,
   AVATAR_PRESETS,
@@ -274,6 +275,7 @@ export default function TacticalLockerTab({
   };
 
   const handleEquipItem = (cat: LockerCategory, item: CosmeticItem) => {
+    sfx.playLockerEquip();
     switch (cat) {
       case "AVATAR":
         setFormData((prev) => ({ ...prev, avatarPreset: item.id }));

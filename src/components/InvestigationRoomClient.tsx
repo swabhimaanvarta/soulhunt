@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Shield,
@@ -30,8 +30,10 @@ import {
   ArrowRight,
   ChevronRight,
   Filter,
+  Trophy,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { sfx } from "@/lib/audio/sfx";
 
 interface Props {
   initialInvestigation: any;
@@ -91,6 +93,48 @@ export default function InvestigationRoomClient({
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Visibility-aware background polling against /api/investigations/[id] (3-4 second interval)
+  useEffect(() => {
+    if (investigation.status === "COMPLETED") return;
+    let isMounted = true;
+    const pollInterval = setInterval(async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      try {
+        const res = await fetch(`/api/investigations/${investigation._id}`);
+        const json = await res.json();
+        if (isMounted && json.success && json.data) {
+          const remoteInv = json.data.investigation;
+          setInvestigation((prev: any) => {
+            if (
+              remoteInv.currentStage !== prev.currentStage ||
+              remoteInv.status !== prev.status ||
+              remoteInv.progressPct !== prev.progressPct ||
+              remoteInv.solvedClues?.length !== prev.solvedClues?.length ||
+              remoteInv.evidenceNodes?.length !== prev.evidenceNodes?.length ||
+              remoteInv.unlockedHintStages?.length !== prev.unlockedHintStages?.length
+            ) {
+              return remoteInv;
+            }
+            return prev;
+          });
+          if (Array.isArray(json.data.clues) && json.data.clues.length > 0) {
+            setClues(json.data.clues);
+          }
+          if (json.data.currentUser?.coins !== undefined) {
+            setUserCoins(json.data.currentUser.coins);
+          }
+        }
+      } catch {
+        // Silently ignore transient network drops during background sync
+      }
+    }, 3500);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [investigation._id, investigation.status]);
+
   const handleShareRoom = () => {
     if (typeof window !== "undefined") {
       navigator.clipboard.writeText(window.location.href);
@@ -129,6 +173,7 @@ export default function InvestigationRoomClient({
       if (typeof window !== "undefined" && "vibrate" in navigator) {
         navigator.vibrate([100, 50, 150]);
       }
+      sfx.playLevelUpFanfare();
 
       setInvestigation((prev: any) => ({
         ...prev,
@@ -218,6 +263,7 @@ export default function InvestigationRoomClient({
       if (typeof window !== "undefined" && "vibrate" in navigator) {
         navigator.vibrate(120);
       }
+      sfx.playDecryptionStutter();
       setSolveMessage({
         text: json.data?.message || "Stage Solved!",
         explanation: json.data?.explanation || "",
@@ -225,22 +271,53 @@ export default function InvestigationRoomClient({
       });
       setAnswerInput("");
 
-      // Update investigation state
-      setInvestigation((prev: any) => ({
-        ...prev,
-        currentStage: json.data?.isQuestComplete ? prev.currentStage : prev.currentStage + 1,
-        progressPct: json.data?.progressPct ?? prev.progressPct,
-        status: json.data?.isQuestComplete ? "READY_FOR_RECOVERY" : prev.status,
-        solvedClues: [
-          ...prev.solvedClues,
-          {
-            clueId: currentClue._id,
-            stageOrder: currentClue.stageOrder,
-            solvedByName: currentUser?.displayName || "You",
-            solvedAt: new Date(),
-          },
-        ],
-      }));
+      // Immediately refresh investigation state and revealed clues from server
+      try {
+        const refRes = await fetch(`/api/investigations/${investigation._id}`);
+        const refJson = await refRes.json();
+        if (refJson.success && refJson.data) {
+          setInvestigation(refJson.data.investigation);
+          if (Array.isArray(refJson.data.clues) && refJson.data.clues.length > 0) {
+            setClues(refJson.data.clues);
+          }
+          if (refJson.data.currentUser?.coins !== undefined) {
+            setUserCoins(refJson.data.currentUser.coins);
+          }
+        } else {
+          // Fallback optimistic update
+          setInvestigation((prev: any) => ({
+            ...prev,
+            currentStage: json.data?.nextStage ?? (prev.currentStage + 1),
+            progressPct: json.data?.progressPct ?? prev.progressPct,
+            status: json.data?.status ?? prev.status,
+            solvedClues: [
+              ...(prev.solvedClues || []),
+              {
+                clueId: currentClue._id,
+                stageOrder: currentClue.stageOrder,
+                solvedByName: currentUser?.displayName || "You",
+                solvedAt: new Date(),
+              },
+            ],
+          }));
+        }
+      } catch {
+        setInvestigation((prev: any) => ({
+          ...prev,
+          currentStage: json.data?.nextStage ?? (prev.currentStage + 1),
+          progressPct: json.data?.progressPct ?? prev.progressPct,
+          status: json.data?.status ?? prev.status,
+          solvedClues: [
+            ...(prev.solvedClues || []),
+            {
+              clueId: currentClue._id,
+              stageOrder: currentClue.stageOrder,
+              solvedByName: currentUser?.displayName || "You",
+              solvedAt: new Date(),
+            },
+          ],
+        }));
+      }
     } catch (e: any) {
       setSolveMessage({ text: e.message || "Failed to submit clue answer.", error: true });
     } finally {
@@ -411,10 +488,17 @@ export default function InvestigationRoomClient({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 relative z-10">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2.5">
-              <span className="px-3 py-1 rounded-full text-xs font-mono uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1.5">
-                <Shield className="w-3.5 h-3.5" />
-                {squad ? `SQUAD [${squad.tag}] — ${squad.name}` : "SOLO RECON"}
-              </span>
+              {investigation.isSquadInvestigation ? (
+                <span className="px-3 py-1 rounded-full text-xs font-mono uppercase tracking-wider bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-bold flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  {squad ? `SQUAD [${squad.tag}] — ${squad.name}` : "SQUAD RAID"}
+                </span>
+              ) : (
+                <span className="px-3 py-1 rounded-full text-xs font-mono uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 font-bold flex items-center gap-1.5">
+                  <Compass className="w-3.5 h-3.5" />
+                  SOLO RECON
+                </span>
+              )}
 
               <span className="font-mono text-xs text-amber-400 font-bold bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/25">
                 {quest.questCode}
@@ -492,9 +576,11 @@ export default function InvestigationRoomClient({
               <span className="flex items-center gap-1 text-amber-300 font-bold">
                 🪙 +{quest.coinReward} Coins
               </span>
-              <span className="flex items-center gap-1 text-cyan-300 font-bold">
-                🛡️ +{quest.squadXpReward} Squad XP
-              </span>
+              {investigation.isSquadInvestigation && (
+                <span className="flex items-center gap-1 text-cyan-300 font-bold">
+                  🛡️ +{quest.squadXpReward} Squad XP
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -561,7 +647,7 @@ export default function InvestigationRoomClient({
               : "text-slate-400 hover:text-white"
           }`}
         >
-          Payout
+          {investigation.isSquadInvestigation ? "Payout" : "Dossier"}
         </button>
       </div>
 
@@ -838,7 +924,9 @@ export default function InvestigationRoomClient({
                   <Camera className="w-8 h-8 text-slate-600 mx-auto mb-2" />
                   <p>No field evidence pinned in this category.</p>
                   <p className="text-[11px] text-slate-600 mt-1">
-                    Click &ldquo;Pin Evidence&rdquo; to share findings or sightings with your squad.
+                    {investigation.isSquadInvestigation
+                      ? "Click “Pin Evidence” to share findings or sightings with your squad."
+                      : "Record field notes and observations for your case dossier."}
                   </p>
                 </div>
               ) : (
@@ -921,8 +1009,17 @@ export default function InvestigationRoomClient({
         >
           <div className="rounded-3xl bg-[#111827]/90 border border-white/10 p-5 space-y-4 shadow-xl">
             <h2 className="text-xs font-mono uppercase tracking-wider text-slate-300 flex items-center gap-2 font-bold border-b border-white/10 pb-3">
-              <Users className="w-4 h-4 text-cyan-400" />
-              Squad Payout & Recovery
+              {investigation.isSquadInvestigation ? (
+                <>
+                  <Users className="w-4 h-4 text-cyan-400" />
+                  Squad Payout & Recovery
+                </>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                  Hunter Case Dossier & Payout
+                </>
+              )}
             </h2>
 
             <div className="p-4 rounded-2xl bg-slate-950/90 border border-emerald-500/25 space-y-2">
@@ -934,7 +1031,9 @@ export default function InvestigationRoomClient({
                 {quest.restrictedRoomNote || (quest.targetLocationId?.name || "Campus Main Gate")}
               </div>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Participating hunters earn 100% Base XP ({quest.xpReward} XP) and Coins ({quest.coinReward} Coins). Submitting finder earns +15% Finder Bonus.
+                {investigation.isSquadInvestigation
+                  ? `Participating squad hunters earn 100% Base XP (${quest.xpReward} XP) and Coins (${quest.coinReward} Coins). Submitting finder earns +15% Finder Bonus.`
+                  : `Solo Recon operatives earn 100% Base XP (${quest.xpReward} XP) and Coins (${quest.coinReward} Coins) directly credited to your account.`}
               </p>
             </div>
 
@@ -1279,18 +1378,28 @@ export default function InvestigationRoomClient({
               </p>
             </div>
 
-            {claimResult.rewards && (
-              <div className="grid grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-950/80 border border-white/10 font-mono">
-                <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <div className="text-[10px] text-emerald-400 uppercase font-bold">XP Earned</div>
-                  <div className="text-lg font-black text-white">+{claimResult.rewards.xp}</div>
+            {(claimResult.rewards || claimResult.xpAwarded !== undefined) && (() => {
+              const xpVal = claimResult.rewards?.xp ?? claimResult.xpAwarded ?? 0;
+              const coinsVal = claimResult.rewards?.coins ?? claimResult.coinsAwarded ?? 0;
+              const trophiesVal = claimResult.rewards?.trophies ?? claimResult.trophiesAwarded ?? 25;
+
+              return (
+                <div className="grid grid-cols-3 gap-2.5 p-4 rounded-2xl bg-slate-950/80 border border-white/10 font-mono">
+                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <div className="text-[10px] text-emerald-400 uppercase font-bold">XP Earned</div>
+                    <div className="text-base font-black text-white">+{xpVal}</div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                    <div className="text-[10px] text-amber-400 uppercase font-bold">Coins</div>
+                    <div className="text-base font-black text-white">+{coinsVal} 🪙</div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-amber-400/15 border border-amber-400/30 shadow-md">
+                    <div className="text-[10px] text-amber-300 uppercase font-bold">Trophies</div>
+                    <div className="text-base font-black text-amber-300">+{trophiesVal} 🏆</div>
+                  </div>
                 </div>
-                <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                  <div className="text-[10px] text-amber-400 uppercase font-bold">Coins Awarded</div>
-                  <div className="text-lg font-black text-white">+{claimResult.rewards.coins} 🪙</div>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="flex flex-col gap-2 pt-2">
               <Link

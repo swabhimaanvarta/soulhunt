@@ -26,7 +26,10 @@ import {
   Calendar,
   LayoutDashboard,
   Loader2,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import { sfx } from "@/lib/audio/sfx";
 
 interface UserSession {
   id: string;
@@ -58,6 +61,19 @@ export default function Navbar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+
+  useEffect(() => {
+    setIsMuted(sfx.isMuted());
+  }, []);
+
+  const handleToggleAudio = () => {
+    const next = sfx.toggleMute();
+    setIsMuted(next);
+    if (!next) {
+      sfx.playRadarPing(1400, 0.15);
+    }
+  };
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -391,6 +407,21 @@ export default function Navbar() {
                       </span>
                     )}
                   </Link>
+
+                  {/* Tactical Audio SFX Mute/Unmute Toggle */}
+                  <button
+                    type="button"
+                    onClick={handleToggleAudio}
+                    className="p-2 min-w-[44px] min-h-[44px] rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-1 focus-visible:ring-offset-slate-950"
+                    aria-label={isMuted ? "Unmute Tactical Sound Effects" : "Mute Tactical Sound Effects"}
+                    title={isMuted ? "Sound Effects: Muted (Click to enable)" : "Sound Effects: Active (Click to mute)"}
+                  >
+                    {isMuted ? (
+                      <VolumeX className="w-4 h-4 text-slate-500" />
+                    ) : (
+                      <Volume2 className="w-4 h-4 text-emerald-400" />
+                    )}
+                  </button>
 
                   {/* User Profile Avatar Dropdown */}
                   <div className="relative">
