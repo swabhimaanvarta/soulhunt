@@ -6,6 +6,7 @@ import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { LostItem, Quest, Clue, SystemConfig, User, CampusLocation } from "@/models";
 import { sanitizeSensitiveText } from "@/lib/privacy";
+import { recordDailyQuestAction } from "@/lib/dailyQuests";
 
 const LostItemSchema = z.object({
   title: z
@@ -243,7 +244,7 @@ export async function POST(req: NextRequest) {
       spotDetails: spotDetails || "",
       lostAt: lostAt ? new Date(lostAt) : new Date(),
       approximateTimeRange: approximateTimeRange || "",
-      recoveryPreference: recoveryPreference === "DIRECT_CONTACT_MODERATED" ? "HANDOVER_AT_SAFE_DESK" : recoveryPreference,
+      recoveryPreference,
       rewardOffered: Math.max(0, rewardOffered),
       convertToQuest,
       photoUrl: photoUrl || "/placeholder-item.png",
@@ -257,6 +258,10 @@ export async function POST(req: NextRequest) {
           timestamp: new Date(),
         },
       ],
+    });
+
+    await recordDailyQuestAction(user._id.toString(), "REPORT_LOST").catch((err) => {
+      console.error("[DailyQuest] Failed to record lost report action:", err);
     });
 
     // 8. Opt-in Quest Creation

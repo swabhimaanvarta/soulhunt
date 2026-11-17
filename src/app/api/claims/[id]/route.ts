@@ -81,22 +81,6 @@ export async function GET(
     if (isApproved && isPinRecipient) {
       if (claim.handoverCode) {
         activeHandoverCode = claim.handoverCode;
-      } else {
-        // Fallback: look up generated PIN from notification
-        const notif = await Notification.findOne({
-          userId: user._id,
-          category: "CLAIM_UPDATE",
-          linkUrl: { $regex: claim.itemId.toString() },
-          message: /PIN is (\d{6})/,
-        }).sort({ createdAt: -1 });
-
-        if (notif) {
-          const match = notif.message.match(/PIN is (\d{6})/);
-          if (match && match[1]) {
-            activeHandoverCode = match[1];
-            await ClaimRequest.findByIdAndUpdate(claim._id, { handoverCode: activeHandoverCode });
-          }
-        }
       }
     }
 

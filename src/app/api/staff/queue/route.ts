@@ -32,6 +32,9 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const requestedStationId = searchParams.get("stationId");
     const viewAll = searchParams.get("all") === "true";
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+    const skip = (page - 1) * limit;
 
     let targetStationId: string | null = null;
     let stationInfo: any = null;
@@ -81,12 +84,17 @@ export async function GET(req: NextRequest) {
       filter.safeDeskLocationId = targetStationId;
     }
 
-    const items = await FoundItem.find(filter)
-      .populate("finderId", "displayName username email avatarUrl")
-      .populate("foundLocationId", "name code zoneType")
-      .populate("safeDeskLocationId", "name code operatingHours zoneType isSafeDesk")
-      .sort({ updatedAt: -1 })
-      .lean();
+    const [items, total] = await Promise.all([
+      FoundItem.find(filter)
+        .populate("finderId", "displayName username email avatarUrl")
+        .populate("foundLocationId", "name code zoneType")
+        .populate("safeDeskLocationId", "name code operatingHours zoneType isSafeDesk")
+        .sort({ updatedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      FoundItem.countDocuments(filter),
+    ]);
 
     // Query active claim requests for these items
     const itemIds = items.map((i: any) => i._id);
@@ -177,7 +185,13 @@ export async function GET(req: NextRequest) {
           }
         : null,
       items: formattedQueue,
-      total: formattedQueue.length,
+      total,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
       stationId: targetStationId || "ALL",
     });
   } catch (error: any) {

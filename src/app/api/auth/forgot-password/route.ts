@@ -129,7 +129,6 @@ export async function POST(req: NextRequest) {
       success: true,
       message: "A 6-digit password reset clearance code has been dispatched to your institutional inbox.",
       maskedEmail: maskEmail(user.email),
-      email: user.email,
     });
   } catch (error: any) {
     console.error("[POST /api/auth/forgot-password] Error:", error);

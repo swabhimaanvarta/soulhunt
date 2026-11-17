@@ -401,7 +401,7 @@ export default async function HomePage() {
                       Starts: {new Date(ev.startTime).toLocaleDateString()}
                     </span>
                     <Link
-                      href={`/events/${ev.slug}`}
+                      href="/events"
                       className="px-3.5 py-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/35 text-violet-300 border border-violet-500/40 text-xs font-mono font-bold flex items-center gap-1.5 transition-all shadow-sm"
                     >
                       View Operation <ArrowRight className="w-3 h-3" />

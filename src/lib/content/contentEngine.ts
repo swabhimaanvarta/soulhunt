@@ -8,13 +8,14 @@
  */
 
 import { connectDB } from "@/lib/db";
-import { Quest, Clue, Event, Investigation, Transaction, User, Squad } from "@/models";
-import { createAIGameMasterQuest } from "@/lib/ai/gameMaster";
+import { Quest, Clue, Event, Investigation, Transaction, User, Squad, CampusLocation } from "@/models";
+import { getCampusDateKey } from "@/lib/dailyQuests";
+import { CAMPUS_QUEST_TEMPLATES } from "@/lib/content/challengeTemplates";
 
 export async function getOrRotateDailyQuest() {
   await connectDB();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = getCampusDateKey();
 
   // Check if today's daily quest already exists
   let dailyQuest = await Quest.findOne({
@@ -25,29 +26,56 @@ export async function getOrRotateDailyQuest() {
     .populate("targetLocationId", "name code zoneType coordinates")
     .lean();
 
-  // If not found, check if ANY active daily hunt was created today
+  // If not found, check if ANY active daily hunt exists for today's dateKey
   if (!dailyQuest) {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-
     dailyQuest = await Quest.findOne({
       questType: "DAILY_HUNT",
-      createdAt: { $gte: startOfDay },
-      status: "ACTIVE",
+      dailyDate: today,
     })
       .populate("targetLocationId", "name code zoneType coordinates")
       .lean();
   }
 
-  // If still none, automatically spawn a fresh Daily Mystery via Game Master!
+  // If still none, automatically spawn a fresh Daily Mystery via pre-seeded template!
   if (!dailyQuest) {
-    const created = await createAIGameMasterQuest({
+    const dailyTemplates = CAMPUS_QUEST_TEMPLATES.filter((t) => t.questType === "DAILY_HUNT");
+    const template = dailyTemplates.length > 0 ? dailyTemplates[0] : CAMPUS_QUEST_TEMPLATES[0];
+
+    const location = await CampusLocation.findOne({
+      $or: [{ code: template.locationCode }, { isActive: true }],
+    }).lean();
+
+    const questCode = `DAILY-${today.replace(/-/g, "")}`;
+    const createdQuest = await Quest.create({
+      questCode,
+      title: template.title,
+      description: template.description,
       questType: "DAILY_HUNT",
-      difficulty: 2,
-      theme: "CAMPUS_MYSTERY",
+      difficulty: template.difficulty || 2,
+      targetLocationId: location?._id || null,
+      xpReward: template.xpReward || 180,
+      coinReward: template.coinReward || 35,
+      squadXpReward: template.squadXpReward || 60,
+      dailyDate: today,
+      status: "ACTIVE",
     });
 
-    dailyQuest = await Quest.findById(created.quest._id)
+    for (const clueTmpl of template.clues) {
+      await Clue.create({
+        questId: createdQuest._id,
+        stageOrder: clueTmpl.stageOrder,
+        title: clueTmpl.title,
+        clueText: clueTmpl.clueText,
+        verificationType: clueTmpl.verificationType,
+        expectedAnswer: clueTmpl.expectedAnswer,
+        expectedAnswerNormalized: (clueTmpl.expectedAnswer || "").trim().toLowerCase(),
+        hintText: clueTmpl.hintText,
+        hintCoinCost: clueTmpl.hintCoinCost,
+        unlockedBreadcrumbText: clueTmpl.unlockedBreadcrumbText,
+      });
+    }
+
+    dailyQuest = await Quest.findById(createdQuest._id)
       .populate("targetLocationId", "name code zoneType coordinates")
       .lean();
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -80,44 +80,52 @@ export default function ReportFoundItemPage() {
     photoUrl: "",
   });
 
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && d.data) {
-          setCurrentUser(d.data);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setAuthChecked(true));
+  const fetchInitialData = useCallback(async () => {
+    try {
+      const authRes = await fetch("/api/auth/me");
+      const authData = await authRes.json();
+      if (authData.success && authData.data) {
+        setCurrentUser(authData.data);
+      }
+    } catch {
+      // non-blocking
+    } finally {
+      setAuthChecked(true);
+    }
 
-    fetch("/api/locations")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && d.data) {
-          setLocations(d.data);
-          const sds = d.data.filter((l: any) => l.isSafeDesk && l.isActive !== false);
-          setSafeDesks(sds);
+    try {
+      const locRes = await fetch("/api/locations");
+      const locData = await locRes.json();
+      if (locData.success && locData.data) {
+        setLocations(locData.data);
+        const sds = locData.data.filter((l: any) => l.isSafeDesk && l.isActive !== false);
+        setSafeDesks(sds);
 
-          if (d.data.length > 0) {
-            let initialFoundId = d.data[0]._id;
-            if (typeof window !== "undefined") {
-              const urlParams = new URLSearchParams(window.location.search);
-              const paramId = urlParams.get("locationId");
-              if (paramId && d.data.some((l: any) => l._id === paramId)) {
-                initialFoundId = paramId;
-              }
+        if (locData.data.length > 0) {
+          let initialFoundId = locData.data[0]._id;
+          if (typeof window !== "undefined") {
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramId = urlParams.get("locationId");
+            if (paramId && locData.data.some((l: any) => l._id === paramId)) {
+              initialFoundId = paramId;
             }
-
-            setFormData((prev) => ({
-              ...prev,
-              foundLocationId: initialFoundId,
-              currentCustodyLocationId: sds[0]?._id || "",
-            }));
           }
+
+          setFormData((prev) => ({
+            ...prev,
+            foundLocationId: initialFoundId,
+            currentCustodyLocationId: sds[0]?._id || "",
+          }));
         }
-      });
+      }
+    } catch {
+      // non-blocking
+    }
   }, []);
+
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

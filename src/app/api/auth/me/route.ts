@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { Squad } from "@/models";
 
-export async function GET() {
+export async function GET(req: NextRequest): Promise<NextResponse>;
+export async function GET(): Promise<NextResponse>;
+export async function GET(_req?: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
     const user = await getCurrentUser();
@@ -35,6 +37,8 @@ export async function GET() {
       rankTitle: user.rankTitle,
       coins: user.coins,
       xp: user.xp,
+      trophies: user.trophies || 0,
+      weeklyScore: user.weeklyScore || 0,
       trustScore: user.trustScore,
       equippedTitle: user.equippedTitle || "Campus Pathfinder",
       equippedFrame: user.equippedFrame || "frame-emerald-pulse",
@@ -42,6 +46,7 @@ export async function GET() {
       ownedCosmetics: (user.ownedCosmetics || []).map((id: any) => id.toString()),
       isProfilePublic: user.isProfilePublic !== false,
       isLeaderboardPublic: user.isLeaderboardPublic !== false,
+      squadId: user.squadId ? user.squadId.toString() : null,
       squad,
       stats: user.stats,
     };

@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
     claim.handoverLocked = false;
     claim.handoverAttempts = 0;
     claim.lockoutUntil = null;
+    claim.handoverCode = newRawPin;
     claim.handoverCodeHash = newPinHash;
     claim.handoverCodeExpiresAt = expiresAt;
     await claim.save();

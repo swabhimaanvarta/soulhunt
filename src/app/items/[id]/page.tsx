@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -95,7 +95,7 @@ export default function ItemDetailPage() {
   const [rejectingClaimId, setRejectingClaimId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
 
-  const fetchActiveClaim = async (claimId: string) => {
+  const fetchActiveClaim = useCallback(async (claimId: string) => {
     try {
       const res = await fetch(`/api/claims/${claimId}`);
       const json = await res.json();
@@ -105,9 +105,9 @@ export default function ItemDetailPage() {
     } catch {
       // non-blocking
     }
-  };
+  }, []);
 
-  const fetchItem = async () => {
+  const fetchItem = useCallback(async () => {
     try {
       const res = await fetch(`/api/items/${id}`);
       const json = await res.json();
@@ -128,11 +128,11 @@ export default function ItemDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, fetchActiveClaim]);
 
   useEffect(() => {
     if (id) fetchItem();
-  }, [id]);
+  }, [id, fetchItem]);
 
   const handleShare = () => {
     if (typeof window !== "undefined") {

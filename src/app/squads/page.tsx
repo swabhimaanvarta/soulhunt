@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Users,
   Shield,
@@ -19,13 +20,29 @@ import {
   Lock,
   Target,
   Award,
+  Globe,
+  Star,
+  Filter,
 } from "lucide-react";
+import MySquadSyndicateView from "@/components/squads/MySquadSyndicateView";
 
-export default function SquadsDirectoryPage() {
+type TabType = "MY_SQUAD" | "BROWSE";
+type FilterType = "ALL" | "OPEN" | "INVITE_ONLY" | "LOW_REQ";
+
+function SquadsHubContent() {
+  const searchParams = useSearchParams();
+  const queryTab = searchParams?.get("tab");
+
   const [squads, setSquads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterType>("ALL");
   const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [userLoaded, setUserLoaded] = useState(false);
+
+  // Tab State: "MY_SQUAD" | "BROWSE"
+  const [activeTab, setActiveTab] = useState<TabType>("BROWSE");
+  const [hasUserToggledTab, setHasUserToggledTab] = useState(false);
 
   // Create squad modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -38,7 +55,7 @@ export default function SquadsDirectoryPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSession = async () => {
+  const fetchSession = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me");
       const json = await res.json();
@@ -47,33 +64,58 @@ export default function SquadsDirectoryPage() {
       }
     } catch {
       // unauthenticated
+    } finally {
+      setUserLoaded(true);
     }
-  };
+  }, []);
 
-  const fetchSquads = async () => {
+  const fetchSquads = useCallback(async () => {
     try {
-      const url = search.trim() ? `/api/squads?search=${encodeURIComponent(search.trim())}` : "/api/squads";
+      const url = search.trim()
+        ? `/api/squads?search=${encodeURIComponent(search.trim())}`
+        : "/api/squads";
       const res = await fetch(url);
       const json = await res.json();
       if (json.success) setSquads(json.data || []);
     } catch (e) {
-      console.error(e);
+      console.error("Failed to fetch squads list:", e);
     } finally {
       setLoading(false);
     }
-  };
+  }, [search]);
 
   useEffect(() => {
     fetchSession();
-  }, []);
+  }, [fetchSession]);
 
   useEffect(() => {
     fetchSquads();
-  }, [search]);
+  }, [fetchSquads]);
 
+  // Set default tab based on user membership
+  useEffect(() => {
+    if (!userLoaded || hasUserToggledTab) return;
+
+    if (queryTab === "browse") {
+      setActiveTab("BROWSE");
+    } else if (queryTab === "my-squad" || queryTab === "mysquad") {
+      setActiveTab("MY_SQUAD");
+    } else if (currentUser?.squadId || currentUser?.squad?._id) {
+      setActiveTab("MY_SQUAD");
+    } else {
+      setActiveTab("BROWSE");
+    }
+  }, [userLoaded, currentUser, queryTab, hasUserToggledTab]);
+
+  const hasSquad = Boolean(currentUser?.squadId || currentUser?.squad?._id);
   const isLevelEligible = (currentUser?.level || 0) >= 5;
   const isCoinsEligible = (currentUser?.coins || 0) >= 50;
-  const canCharter = isLevelEligible && isCoinsEligible && !currentUser?.squadId;
+  const canCharter = isLevelEligible && isCoinsEligible && !hasSquad;
+
+  const handleTabChange = (tab: TabType) => {
+    setHasUserToggledTab(true);
+    setActiveTab(tab);
+  };
 
   const handleCreateSquad = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,8 +148,11 @@ export default function SquadsDirectoryPage() {
       setTag("");
       setDescription("");
       setMinLevelRequired(1);
-      fetchSession();
-      fetchSquads();
+
+      // Refresh data and switch to My Squad view
+      await fetchSession();
+      await fetchSquads();
+      setActiveTab("MY_SQUAD");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -115,9 +160,24 @@ export default function SquadsDirectoryPage() {
     }
   };
 
+  // Filter squads based on active filter chip
+  const filteredSquads = useMemo(() => {
+    return squads.filter((sq) => {
+      const isSquadOpen = sq.joinType === "OPEN" || (!sq.joinType && sq.privacy === "PUBLIC");
+      const isSquadInviteOnly =
+        sq.joinType === "INVITE_ONLY" || (!sq.joinType && sq.privacy === "INVITE_ONLY");
+      const reqLevel = sq.minLevelRequired || 1;
+
+      if (filter === "OPEN") return isSquadOpen;
+      if (filter === "INVITE_ONLY") return isSquadInviteOnly;
+      if (filter === "LOW_REQ") return reqLevel <= 3;
+      return true;
+    });
+  }, [squads, filter]);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Header */}
+      {/* Top Header Hub Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -125,8 +185,13 @@ export default function SquadsDirectoryPage() {
               CAMPUS DEDUCTION SYNDICATES
             </span>
             <span className="text-xs font-mono text-slate-400">
-              {squads.length} Active Squads
+              {squads.length} Registered Squads
             </span>
+            {hasSquad && (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                ACTIVE OPERATIVE
+              </span>
+            )}
           </div>
           <h1 className="text-3xl font-black text-white tracking-tight">
             Cooperative Investigation Squads
@@ -136,132 +201,349 @@ export default function SquadsDirectoryPage() {
           </p>
         </div>
 
-        <Link
-          href="/squads/create"
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs font-mono shadow-lg shadow-emerald-500/20 transition-all self-start md:self-auto cursor-pointer"
+        {/* Founding action / shortcut */}
+        <div className="flex items-center gap-3 self-start md:self-auto">
+          {!hasSquad ? (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs font-mono shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Found Syndicate
+            </button>
+          ) : (
+            <Link
+              href="/quests?questType=SQUAD_HUNT"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-bold text-xs font-mono shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Launch Squad Raid
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Primary Tab Switcher */}
+      <div className="flex items-center gap-2 sm:gap-3 border-b border-white/10 pb-3 overflow-x-auto no-scrollbar">
+        <button
+          type="button"
+          onClick={() => handleTabChange("MY_SQUAD")}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            activeTab === "MY_SQUAD"
+              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+              : "bg-slate-950/60 text-slate-400 hover:text-white border border-white/5 hover:border-white/15"
+          }`}
         >
-          <PlusCircle className="w-4 h-4" />
-          Form New Squad
-        </Link>
+          <Star className={`w-4 h-4 ${hasSquad ? "text-amber-400 fill-amber-400" : "text-slate-500"}`} />
+          <span>My Squad</span>
+          {hasSquad ? (
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-500/30 text-emerald-300 font-black">
+              ACTIVE
+            </span>
+          ) : (
+            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-slate-800 text-slate-400">
+              Not Enlisted
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange("BROWSE")}
+          className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
+            activeTab === "BROWSE"
+              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+              : "bg-slate-950/60 text-slate-400 hover:text-white border border-white/5 hover:border-white/15"
+          }`}
+        >
+          <Globe className="w-4 h-4 text-cyan-400" />
+          <span>Browse Campus Squads</span>
+          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-slate-800 text-slate-300">
+            {squads.length}
+          </span>
+        </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="max-w-md relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          placeholder="Search squad by name or tag..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-mono"
-        />
-      </div>
-
-      {/* Squads Grid */}
-      {loading ? (
-        <div className="py-20 text-center font-mono text-slate-500 text-xs animate-pulse">
-          LOADING SQUAD ROSTERS...
+      {/* VIEW 1: MY SQUAD (Active Syndicate Hub) */}
+      {activeTab === "MY_SQUAD" && (
+        <div>
+          {!userLoaded ? (
+            <div className="py-20 text-center font-mono text-slate-500 text-xs animate-pulse">
+              SYNCING OPERATIVE SYNDICATE CLEARANCE...
+            </div>
+          ) : hasSquad ? (
+            <MySquadSyndicateView
+              currentUser={currentUser}
+              onBrowseSquads={() => handleTabChange("BROWSE")}
+              onResignSuccess={() => {
+                fetchSession();
+                fetchSquads();
+                handleTabChange("BROWSE");
+              }}
+            />
+          ) : (
+            <div className="glass-panel rounded-3xl p-12 text-center space-y-4 max-w-2xl mx-auto border border-white/10">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400">
+                <Users className="w-7 h-7" />
+              </div>
+              <h3 className="text-xl font-bold text-white">Not Currently Enlisted in a Syndicate</h3>
+              <p className="text-xs text-slate-400 leading-relaxed max-w-md mx-auto">
+                You do not belong to an active campus investigation squad. Join an established open syndicate from the directory or found your own with fellow student hunters.
+              </p>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleTabChange("BROWSE")}
+                  className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all cursor-pointer"
+                >
+                  Browse Campus Directory →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-emerald-400 font-bold text-xs font-mono border border-emerald-500/30 transition-all cursor-pointer"
+                >
+                  Found Syndicate
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      ) : squads.length === 0 ? (
-        <div className="glass-panel rounded-2xl p-12 text-center space-y-3">
-          <Users className="w-12 h-12 text-slate-600 mx-auto" />
-          <h3 className="text-base font-bold text-white">No squads found</h3>
-          <p className="text-xs text-slate-400">
-            Be the first to establish a campus investigation syndicate.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {squads.map((squad, idx) => {
-            const isSquadOpen = (squad.joinType === "OPEN") || (!squad.joinType && squad.privacy === "PUBLIC");
-            const isSquadInviteOnly = (squad.joinType === "INVITE_ONLY") || (!squad.joinType && squad.privacy === "INVITE_ONLY");
-            const isSquadClosed = (squad.joinType === "CLOSED") || (!squad.joinType && squad.privacy === "PRIVATE");
+      )}
 
-            return (
-              <Link
-                key={squad._id}
-                href={`/squads/${squad._id}`}
-                className="glass-panel rounded-2xl p-6 border border-white/10 hover:border-cyan-500/40 transition-all flex flex-col justify-between group"
+      {/* VIEW 2: BROWSE CAMPUS SQUADS (Directory View) */}
+      {activeTab === "BROWSE" && (
+        <div className="space-y-6">
+          {/* Informational Membership Banner if user is currently enlisted in another squad */}
+          {hasSquad && (
+            <div className="p-4 rounded-2xl bg-slate-950/90 border border-cyan-500/30 flex items-start sm:items-center justify-between gap-4 font-mono text-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-white font-bold">Campus Syndicate Directory & Scouting</div>
+                  <div className="text-slate-400 text-[11px] mt-0.5">
+                    You are currently enlisted in your active squad. You can scout other campus syndicates freely here. To join or charter another syndicate, you must first resign from your active squad.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTabChange("MY_SQUAD")}
+                className="px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold text-xs shrink-0 cursor-pointer"
               >
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center font-mono font-black text-emerald-400 text-sm shrink-0">
-                        {squad.tag}
+                Return to My Squad →
+              </button>
+            </div>
+          )}
+
+          {/* Search Bar & Filter Chips */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="max-w-md w-full relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search squad by name or tag..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-950/80 border border-white/10 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-400 font-mono transition-colors"
+              />
+            </div>
+
+            {/* Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <Filter className="w-3.5 h-3.5 text-slate-500 shrink-0 mr-1" />
+              {[
+                { id: "ALL", label: "All Squads" },
+                { id: "OPEN", label: "Open Entry" },
+                { id: "INVITE_ONLY", label: "Invite Only" },
+                { id: "LOW_REQ", label: "Lv.1-3 Friendly" },
+              ].map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => setFilter(chip.id as FilterType)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold whitespace-nowrap transition-all cursor-pointer ${
+                    filter === chip.id
+                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                      : "bg-slate-950/70 text-slate-400 hover:text-white border border-white/5 hover:border-white/10"
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Squads Grid */}
+          {loading ? (
+            <div className="py-20 text-center font-mono text-slate-500 text-xs animate-pulse">
+              LOADING SQUAD ROSTERS...
+            </div>
+          ) : filteredSquads.length === 0 ? (
+            <div className="glass-panel rounded-2xl p-12 text-center space-y-3 border border-white/10">
+              <Users className="w-12 h-12 text-slate-600 mx-auto" />
+              <h3 className="text-base font-bold text-white">No squads match your filters</h3>
+              <p className="text-xs text-slate-400">
+                Adjust your search or filter criteria to discover campus syndicates.
+              </p>
+              {filter !== "ALL" && (
+                <button
+                  type="button"
+                  onClick={() => setFilter("ALL")}
+                  className="px-4 py-2 rounded-xl bg-slate-900 text-cyan-400 text-xs font-mono font-bold border border-cyan-500/30 cursor-pointer"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredSquads.map((squad, idx) => {
+                const isSquadOpen =
+                  squad.joinType === "OPEN" || (!squad.joinType && squad.privacy === "PUBLIC");
+                const isSquadInviteOnly =
+                  squad.joinType === "INVITE_ONLY" ||
+                  (!squad.joinType && squad.privacy === "INVITE_ONLY");
+                const isSquadClosed =
+                  squad.joinType === "CLOSED" || (!squad.joinType && squad.privacy === "PRIVATE");
+
+                const userSquadIdStr = (
+                  currentUser?.squadId?._id ||
+                  currentUser?.squadId ||
+                  currentUser?.squad?._id ||
+                  ""
+                ).toString();
+
+                const isCurrentSquad = Boolean(
+                  userSquadIdStr && squad._id && userSquadIdStr === squad._id.toString()
+                );
+
+                return (
+                  <Link
+                    key={squad._id}
+                    href={`/squads/${squad._id}`}
+                    className={`glass-panel rounded-2xl p-6 border transition-all flex flex-col justify-between group ${
+                      isCurrentSquad
+                        ? "border-emerald-500/50 bg-emerald-950/10 ring-1 ring-emerald-500/30"
+                        : "border-white/10 hover:border-cyan-500/40"
+                    }`}
+                  >
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-10 h-10 rounded-xl bg-slate-800 border border-white/10 flex items-center justify-center font-mono font-black text-emerald-400 text-sm shrink-0">
+                            {squad.tag}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="font-bold text-base text-white group-hover:text-cyan-300 transition-colors truncate">
+                                {squad.name}
+                              </h3>
+                              {isCurrentSquad && (
+                                <span className="px-1.5 py-0.2 rounded text-[8px] font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">
+                                  YOUR SQUAD
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-400 font-mono">
+                              Leader: {squad.leaderId?.displayName || "Agent"}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            LVL {squad.squadLevel || 1}
+                          </span>
+                          {isSquadOpen && (
+                            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              Anyone Can Join
+                            </span>
+                          )}
+                          {isSquadInviteOnly && (
+                            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              Invite Only
+                            </span>
+                          )}
+                          {isSquadClosed && (
+                            <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              Closed
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-bold text-base text-white group-hover:text-cyan-300 transition-colors">
-                          {squad.name}
-                        </h3>
-                        <div className="text-[11px] text-slate-400 font-mono">
-                          Leader: {squad.leaderId?.displayName || "Agent"}
+
+                      <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        {squad.description || "Active campus deduction unit."}
+                      </p>
+
+                      <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-white/5 text-cyan-300 font-bold">
+                          Req Lv.{squad.minLevelRequired || 1}+
+                        </span>
+                        <span className="text-slate-500">•</span>
+                        <span>Capacity: {squad.memberCount || 1}/8</span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5 text-center font-mono text-xs">
+                        <div className="rounded-lg bg-slate-950/60 p-2">
+                          <div className="text-emerald-400 font-bold">{squad.squadXp || 0}</div>
+                          <div className="text-[9px] uppercase text-slate-500">Squad XP</div>
+                        </div>
+                        <div className="rounded-lg bg-slate-950/60 p-2">
+                          <div className="text-cyan-400 font-bold">
+                            {squad.memberCount || 1} / 8
+                          </div>
+                          <div className="text-[9px] uppercase text-slate-500">Members</div>
+                        </div>
+                        <div className="rounded-lg bg-slate-950/60 p-2">
+                          <div className="text-amber-400 font-bold">
+                            {squad.completedHuntsCount || 0}
+                          </div>
+                          <div className="text-[9px] uppercase text-slate-500">Hunts Won</div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                        LVL {squad.squadLevel || 1}
+                    <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-400">
+                      <span>Rank #{idx + 1}</span>
+                      <span className="font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        {isCurrentSquad ? (
+                          <span className="text-emerald-400 flex items-center gap-1">
+                            Enter Command Room <ArrowRight className="w-3 h-3" />
+                          </span>
+                        ) : !hasSquad ? (
+                          isSquadOpen ? (
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              Enlist / View Hub <ArrowRight className="w-3 h-3" />
+                            </span>
+                          ) : isSquadInviteOnly ? (
+                            <span className="text-amber-300 flex items-center gap-1">
+                              Apply / View Hub <ArrowRight className="w-3 h-3" />
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 flex items-center gap-1">
+                              View Squad Hub <ArrowRight className="w-3 h-3" />
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-cyan-400 flex items-center gap-1">
+                            View Squad Command Hub <ArrowRight className="w-3 h-3" />
+                          </span>
+                        )}
                       </span>
-                      {isSquadOpen && (
-                        <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                          Anyone Can Join
-                        </span>
-                      )}
-                      {isSquadInviteOnly && (
-                        <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                          Invite Only
-                        </span>
-                      )}
-                      {isSquadClosed && (
-                        <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                          Closed
-                        </span>
-                      )}
                     </div>
-                  </div>
-
-                  <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                    {squad.description || "Active campus deduction unit."}
-                  </p>
-
-                  <div className="flex items-center gap-2 text-[10px] font-mono text-slate-400">
-                    <span className="px-2 py-0.5 rounded bg-slate-900 border border-white/5 text-cyan-300 font-bold">
-                      Req Lv.{squad.minLevelRequired || 1}+
-                    </span>
-                    <span className="text-slate-500">•</span>
-                    <span>Capacity: {squad.memberCount || 1}/8</span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-white/5 text-center font-mono text-xs">
-                    <div className="rounded-lg bg-slate-950/60 p-2">
-                      <div className="text-emerald-400 font-bold">{squad.squadXp || 0}</div>
-                      <div className="text-[9px] uppercase text-slate-500">Squad XP</div>
-                    </div>
-                    <div className="rounded-lg bg-slate-950/60 p-2">
-                      <div className="text-cyan-400 font-bold">{squad.memberCount || 1} / 8</div>
-                      <div className="text-[9px] uppercase text-slate-500">Members</div>
-                    </div>
-                    <div className="rounded-lg bg-slate-950/60 p-2">
-                      <div className="text-amber-400 font-bold">{squad.completedHuntsCount || 0}</div>
-                      <div className="text-[9px] uppercase text-slate-500">Hunts Won</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-4 mt-4 border-t border-white/5 flex items-center justify-between text-xs font-mono text-slate-400">
-                  <span>Rank #{idx + 1}</span>
-                  <span className="text-cyan-400 font-bold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                    View Squad Command Hub <ArrowRight className="w-3 h-3" />
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Create Squad Modal */}
+      {/* Charter Squad Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 overflow-hidden">
           <div className="relative rounded-3xl bg-slate-900 border border-white/15 max-w-xl w-full shadow-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -283,7 +565,7 @@ export default function SquadsDirectoryPage() {
               <button
                 type="button"
                 onClick={() => setShowCreateModal(false)}
-                className="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center font-mono text-sm"
+                className="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors flex items-center justify-center font-mono text-sm cursor-pointer"
               >
                 ✕
               </button>
@@ -340,13 +622,13 @@ export default function SquadsDirectoryPage() {
                   </div>
                 </div>
 
-                {currentUser?.squadId && (
+                {hasSquad && (
                   <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px]">
                     ⚠️ You are currently in a squad. Resign before founding a new syndicate.
                   </div>
                 )}
 
-                {!canCharter && !currentUser?.squadId && (
+                {!canCharter && !hasSquad && (
                   <div className="p-2.5 rounded-xl bg-slate-900/80 border border-white/5 text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-2">
                     <span>Need more XP or coins? Solve campus mystery quests.</span>
                     <Link
@@ -393,7 +675,11 @@ export default function SquadsDirectoryPage() {
                             : "bg-rose-500/20 text-rose-300 border-rose-500/40"
                         }`}
                       >
-                        {joinType === "OPEN" ? "Anyone Can Join" : joinType === "INVITE_ONLY" ? "Invite Only" : "Closed"}
+                        {joinType === "OPEN"
+                          ? "Anyone Can Join"
+                          : joinType === "INVITE_ONLY"
+                          ? "Invite Only"
+                          : "Closed"}
                       </span>
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-mono text-slate-400 bg-white/5 border border-white/10">
                         Req Lv.{minLevelRequired}+
@@ -448,7 +734,9 @@ export default function SquadsDirectoryPage() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-mono text-slate-300">Minimum Level Required</label>
+                    <label className="text-xs font-mono text-slate-300">
+                      Minimum Level Required
+                    </label>
                     <select
                       value={minLevelRequired}
                       onChange={(e) => setMinLevelRequired(Number(e.target.value))}
@@ -463,52 +751,60 @@ export default function SquadsDirectoryPage() {
                   </div>
                 </div>
 
-                {/* Clash of Clans Style Recruitment Mode */}
+                {/* Recruitment Mode */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-mono text-slate-300">Recruitment Access Type</label>
+                  <label className="text-xs font-mono text-slate-300">
+                    Recruitment Access Type
+                  </label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
                       type="button"
                       onClick={() => setJoinType("OPEN")}
-                      className={`p-3 rounded-xl border text-left font-mono transition-all ${
+                      className={`p-3 rounded-xl border text-left font-mono transition-all cursor-pointer ${
                         joinType === "OPEN"
                           ? "bg-emerald-500/20 border-emerald-500 text-white ring-1 ring-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.2)]"
                           : "bg-slate-950/70 border-white/10 text-slate-400 hover:border-white/20"
                       }`}
                     >
                       <div className="text-xs font-bold text-emerald-400">Anyone can join</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">Instant entry if level is met</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                        Instant entry if level is met
+                      </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setJoinType("INVITE_ONLY")}
-                      className={`p-3 rounded-xl border text-left font-mono transition-all ${
+                      className={`p-3 rounded-xl border text-left font-mono transition-all cursor-pointer ${
                         joinType === "INVITE_ONLY"
                           ? "bg-amber-500/20 border-amber-500 text-white ring-1 ring-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
                           : "bg-slate-950/70 border-white/10 text-slate-400 hover:border-white/20"
                       }`}
                     >
                       <div className="text-xs font-bold text-amber-400">Invite only</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">Requires leadership approval</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                        Requires leadership approval
+                      </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setJoinType("CLOSED")}
-                      className={`p-3 rounded-xl border text-left font-mono transition-all ${
+                      className={`p-3 rounded-xl border text-left font-mono transition-all cursor-pointer ${
                         joinType === "CLOSED"
                           ? "bg-rose-500/20 border-rose-500 text-white ring-1 ring-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.2)]"
                           : "bg-slate-950/70 border-white/10 text-slate-400 hover:border-white/20"
                       }`}
                     >
                       <div className="text-xs font-bold text-rose-400">Closed</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">No new applicants accepted</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                        No new applicants accepted
+                      </div>
                     </button>
                   </div>
                 </div>
 
-                {/* Tactical Emblem Picker */}
+                {/* Emblem Crest */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-mono text-slate-300">Emblem Crest</label>
                   <div className="grid grid-cols-6 gap-2">
@@ -527,7 +823,7 @@ export default function SquadsDirectoryPage() {
                           key={emb.id}
                           type="button"
                           onClick={() => setEmblemIcon(emb.id)}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                          className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition-all cursor-pointer ${
                             isSelected
                               ? "bg-emerald-500/20 border-emerald-500 text-emerald-400 ring-1 ring-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
                               : "bg-slate-950/70 border-white/10 text-slate-400 hover:text-white"
@@ -572,7 +868,7 @@ export default function SquadsDirectoryPage() {
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                  className="px-4 py-2 rounded-xl text-xs font-mono text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -600,3 +896,16 @@ export default function SquadsDirectoryPage() {
   );
 }
 
+export default function SquadsDirectoryPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="py-24 text-center font-mono text-slate-500 text-xs animate-pulse">
+          INITIALIZING SQUADS HUB...
+        </div>
+      }
+    >
+      <SquadsHubContent />
+    </Suspense>
+  );
+}

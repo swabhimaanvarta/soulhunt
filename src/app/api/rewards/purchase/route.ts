@@ -4,6 +4,8 @@ import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { Reward, User, Transaction } from "@/models";
 import { getCurrentUser } from "@/lib/auth";
+import { logAuditEvent } from "@/lib/audit";
+import { isStarterCosmetic } from "@/lib/cosmetics";
 
 const PurchaseRequestSchema = z.object({
   rewardId: z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid reward ID format"),
@@ -99,6 +101,24 @@ export async function POST(req: NextRequest) {
 
     const rewardTitle = reward.title || reward.name || "Item";
 
+    // Starter loadout validation: zero paywalls, starter items cannot be purchased
+    const isStarterItem =
+      isStarterCosmetic(reward.code || "") ||
+      isStarterCosmetic(reward.metadata?.value || "") ||
+      isStarterCosmetic(reward.title || "") ||
+      isStarterCosmetic(reward.name || "");
+
+    if (isStarterItem) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ALREADY_OWNED",
+          message: "This item is part of your starter loadout and is already free.",
+        },
+        { status: 400 }
+      );
+    }
+
     if (user.level < reward.minLevelRequired) {
       return NextResponse.json(
         {
@@ -112,13 +132,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const isCosmetic = ["FRAME", "TITLE", "THEME", "BADGE"].includes(reward.type);
+    const isCosmetic = [
+      "FRAME",
+      "TITLE",
+      "THEME",
+      "BADGE",
+      "AVATAR",
+      "BANNER",
+      "BANNER_FRAME",
+      "EFFECT",
+      "DECORATION",
+    ].includes(reward.type);
     const hasFiniteStock = typeof reward.stock === "number" && reward.stock >= 0;
 
     // Check if user already owns cosmetic
-    if (isCosmetic && user.ownedCosmetics?.some((id: any) => id.toString() === rewardId)) {
+    if (user.ownedCosmetics?.some((id: any) => id.toString() === reward._id.toString())) {
       return NextResponse.json(
-        { success: false, error: { code: "ALREADY_OWNED", message: "You already own this cosmetic item." } },
+        { success: false, error: "ALREADY_OWNED", message: "You already own this cosmetic item." },
         { status: 400 }
       );
     }
@@ -167,10 +197,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: {
-              code: "INSUFFICIENT_FUNDS",
-              message: `Insufficient Hunter Coins. Needed: ${reward.coinCost}, Available: ${freshUser.coins}.`,
-            },
+            error: "INSUFFICIENT_FUNDS",
+            message: `Insufficient Hunter Coins. Needed: ${reward.coinCost}, Available: ${freshUser.coins}.`,
           },
           { status: 400 }
         );
@@ -179,7 +207,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: { code: "PURCHASE_FAILED", message: "Transaction could not be completed. Check balance and try again." },
+          error: "PURCHASE_FAILED",
+          message: "Transaction could not be completed. Check balance and try again.",
         },
         { status: 400 }
       );
@@ -251,6 +280,20 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    // 6. Invoke immutable audit logging for reward purchase
+    await logAuditEvent({
+      actorId: user._id,
+      actorName: user.displayName || user.username,
+      actorRole: user.role,
+      action: "REWARD_PURCHASE",
+      targetType: "REWARD",
+      targetId: reward._id,
+      targetLabel: rewardTitle,
+      reason: `Purchased cosmetic reward '${rewardTitle}' for ${reward.coinCost} coins`,
+      beforeState: { coins: user.coins },
+      afterState: { coins: updatedUser.coins, ownedCosmetics: updatedUser.ownedCosmetics },
+    });
 
     return NextResponse.json({
       success: true,

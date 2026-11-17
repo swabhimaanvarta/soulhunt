@@ -212,8 +212,9 @@ async function generateWithGemini(
 
     if (!res.ok) {
       const errorText = await res.text().catch(() => "");
-      console.warn(`[AIGameMaster] Gemini HTTP ${res.status}: ${errorText}`);
-      return null;
+      const msg = `Gemini HTTP ${res.status}: ${errorText}`;
+      console.warn(`[AIGameMaster] ${msg}`);
+      throw new Error(msg);
     }
 
     const data = await res.json();
@@ -291,8 +292,9 @@ async function generateWithOpenAI(
 
     if (!res.ok) {
       const errorText = await res.text().catch(() => "");
-      console.warn(`[AIGameMaster] OpenAI HTTP ${res.status}: ${errorText}`);
-      return null;
+      const msg = `OpenAI HTTP ${res.status}: ${errorText}`;
+      console.warn(`[AIGameMaster] ${msg}`);
+      throw new Error(msg);
     }
 
     const data = await res.json();

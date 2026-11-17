@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 export default function RouteProgressBar() {
@@ -10,24 +10,30 @@ export default function RouteProgressBar() {
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const currentPathRef = useRef(pathname);
+  const prevRouteKeyRef = useRef(`${pathname}?${searchParams?.toString() || ""}`);
 
   useEffect(() => {
     currentPathRef.current = pathname;
   }, [pathname]);
 
+
   // Complete loading when pathname or searchParams change
   useEffect(() => {
-    if (loading) {
-      setProgress(100);
-      const timer = setTimeout(() => {
-        setLoading(false);
-        setProgress(0);
-      }, 250);
-      return () => clearTimeout(timer);
+    const currentRouteKey = `${pathname}?${searchParams?.toString() || ""}`;
+    if (prevRouteKeyRef.current !== currentRouteKey) {
+      prevRouteKeyRef.current = currentRouteKey;
+      if (loading) {
+        setProgress(100);
+        const timer = setTimeout(() => {
+          setLoading(false);
+          setProgress(0);
+        }, 250);
+        return () => clearTimeout(timer);
+      }
     }
-  }, [pathname, searchParams]);
+  }, [pathname, searchParams, loading]);
 
-  const startProgress = () => {
+  const startProgress = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     setLoading(true);
     setProgress(15);
@@ -41,7 +47,7 @@ export default function RouteProgressBar() {
       }
       setProgress(current);
     }, 120);
-  };
+  }, []);
 
   useEffect(() => {
     // Expose helper on window for programmatic router.push calls
@@ -93,7 +99,7 @@ export default function RouteProgressBar() {
       window.removeEventListener("popstate", handlePopState);
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []);
+  }, [startProgress]);
 
   if (!loading && progress === 0) return null;
 

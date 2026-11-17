@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Calendar,
@@ -23,7 +23,7 @@ export default function CampusEventsPage() {
   const [joinSuccess, setJoinSuccess] = useState<string | null>(null);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     try {
       const res = await fetch("/api/events?active=true");
       const json = await res.json();
@@ -35,11 +35,11 @@ export default function CampusEventsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchEvents();
-  }, []);
+  }, [fetchEvents]);
 
   const handleJoin = async (eventId: string) => {
     setJoiningId(eventId);

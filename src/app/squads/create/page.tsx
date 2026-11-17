@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -39,7 +39,7 @@ export default function CreateSquadPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSession = async () => {
+  const fetchSession = useCallback(async () => {
     try {
       setLoadingSession(true);
       const res = await fetch("/api/auth/me");
@@ -54,11 +54,11 @@ export default function CreateSquadPage() {
     } finally {
       setLoadingSession(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchSession();
-  }, []);
+  }, [fetchSession]);
 
   const isLevelEligible = (currentUser?.level || 0) >= 5;
   const isCoinsEligible = (currentUser?.coins || 0) >= 50;
@@ -526,7 +526,7 @@ export default function CreateSquadPage() {
               <div className="pt-3 border-t border-white/5 grid grid-cols-3 gap-2 text-center font-mono">
                 <div className="p-2 rounded-xl bg-slate-950/60 border border-white/5">
                   <div className="text-[10px] text-slate-500 uppercase">Members</div>
-                  <div className="text-xs font-bold text-white mt-0.5">1 / 50</div>
+                  <div className="text-xs font-bold text-white mt-0.5">1 / 8</div>
                 </div>
                 <div className="p-2 rounded-xl bg-slate-950/60 border border-white/5">
                   <div className="text-[10px] text-slate-500 uppercase">Squad XP</div>

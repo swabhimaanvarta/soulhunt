@@ -32,7 +32,6 @@ export async function GET(
         $or: [
           { photoUrl: { $regex: safeEscapedFilename } },
           { blurredPhotoUrl: { $regex: safeEscapedFilename } },
-          { rawPhotoUrl: { $regex: safeEscapedFilename } },
           { photos: { $regex: safeEscapedFilename } },
         ],
       }),
@@ -40,7 +39,6 @@ export async function GET(
         $or: [
           { photoUrl: { $regex: safeEscapedFilename } },
           { blurredPhotoUrl: { $regex: safeEscapedFilename } },
-          { rawPhotoUrl: { $regex: safeEscapedFilename } },
         ],
       }),
     ]);
@@ -75,7 +73,7 @@ export async function GET(
       if (!isAuthorized) {
         // Check if user is a participant in a Claim containing this photo
         const claim = await ClaimRequest.findOne({
-          proofPhotoUrl: { $regex: filename },
+          proofPhotoUrl: { $regex: safeEscapedFilename },
           $or: [{ claimantId: user._id }, { counterpartyUserId: user._id }],
         });
         if (claim) isAuthorized = true;
@@ -84,9 +82,19 @@ export async function GET(
       if (!isAuthorized) {
         // Check if user reported the lost item or found item
         const [lost, found] = await Promise.all([
-          LostItem.findOne({ photos: { $regex: filename }, reporterId: user._id }),
+          LostItem.findOne({
+            $or: [
+              { photos: { $regex: safeEscapedFilename } },
+              { rawPhotoUrl: { $regex: safeEscapedFilename } },
+              { photoUrl: { $regex: safeEscapedFilename } },
+            ],
+            reporterId: user._id,
+          }),
           FoundItem.findOne({
-            $or: [{ rawPhotoUrl: { $regex: filename } }, { photoUrl: { $regex: filename } }],
+            $or: [
+              { rawPhotoUrl: { $regex: safeEscapedFilename } },
+              { photoUrl: { $regex: safeEscapedFilename } },
+            ],
             finderId: user._id,
           }),
         ]);
@@ -94,10 +102,10 @@ export async function GET(
       }
 
       if (!isAuthorized) {
-        // Check if user is participant in linked investigation
+        // Check if user is owner or participant in linked investigation
         const inv = await Investigation.findOne({
-          "evidenceNodes.mediaUrl": { $regex: filename },
-          participatingUserIds: user._id,
+          "evidenceNodes.mediaUrl": { $regex: safeEscapedFilename },
+          $or: [{ userId: user._id }, { participatingUserIds: user._id }],
         });
         if (inv) isAuthorized = true;
       }

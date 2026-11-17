@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { FoundItem, CampusLocation, User } from "@/models";
 import { sanitizeSensitiveText, requiresAutomaticPhotoBlur } from "@/lib/privacy";
+import { recordDailyQuestAction } from "@/lib/dailyQuests";
 
 const FoundItemSchema = z.object({
   title: z
@@ -289,6 +290,10 @@ export async function POST(req: NextRequest) {
           timestamp: new Date(),
         },
       ],
+    });
+
+    await recordDailyQuestAction(user._id.toString(), "DEPOSIT_FOUND").catch((err) => {
+      console.error("[DailyQuest] Failed to record found deposit action:", err);
     });
 
     return NextResponse.json(

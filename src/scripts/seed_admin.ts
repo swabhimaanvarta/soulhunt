@@ -94,7 +94,7 @@ async function seedAdmin() {
         rankTitle: "Campus Commander",
         coins: 500,
         trustScore: 100,
-        trustTier: "CAMPUS_LEGEND",
+        trustTier: "ELITE_INVESTIGATOR",
       },
     },
     { upsert: true, new: true }
@@ -119,7 +119,7 @@ async function seedAdmin() {
         rankTitle: "Safe-Desk Inspector",
         coins: 250,
         trustScore: 95,
-        trustTier: "VERIFIED_OPERATIVE",
+        trustTier: "ELITE_INVESTIGATOR",
       },
     },
     { upsert: true, new: true }
@@ -144,7 +144,7 @@ async function seedAdmin() {
         rankTitle: "Field Operative",
         coins: 100,
         trustScore: 85,
-        trustTier: "TRUSTED_RECOVERER",
+        trustTier: "ACTIVE_HUNTER",
       },
     },
     { upsert: true, new: true }
@@ -164,3 +164,4 @@ seedAdmin().catch((err) => {
   console.error("❌ Error seeding admin accounts:", err);
   process.exit(1);
 });
+

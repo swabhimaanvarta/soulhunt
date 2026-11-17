@@ -5,6 +5,7 @@ import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { Clue, Investigation, Quest, SystemConfig, User, Notification } from "@/models";
 import { normalizeClueAnswer } from "@/lib/privacy";
+import { recordDailyQuestAction } from "@/lib/dailyQuests";
 
 const SolveClueSchema = z.object({
   stageOrder: z.number().int().min(1),
@@ -48,19 +49,55 @@ export async function POST(
     }
 
     const investigation = investigationId
-      ? await Investigation.findById(investigationId).select("+stageVariants.customExpectedAnswer")
+      ? await Investigation.findById(investigationId).select(
+          "+stageVariants.customExpectedAnswer +stageVariants.acceptableAnswers +stageVariants.explanation"
+        )
       : await Investigation.findOne({
           questId: quest._id,
-          $or: [{ userId: user._id }, { squadId: user.squadId }],
-        }).select("+stageVariants.customExpectedAnswer");
+          $or: [
+            { userId: user._id },
+            { participatingUserIds: user._id },
+            ...(user.squadId ? [{ squadId: user.squadId }] : []),
+          ],
+        }).select(
+          "+stageVariants.customExpectedAnswer +stageVariants.acceptableAnswers +stageVariants.explanation"
+        );
 
-    if (!investigation) {
+    if (!investigation || investigation.questId.toString() !== quest._id.toString()) {
       return NextResponse.json(
         {
           success: false,
           error: { code: "NOT_ACCEPTED", message: "Accept this quest before solving clues." },
         },
         { status: 400 }
+      );
+    }
+
+    const callerIdStr = user._id.toString();
+    const isOwner = investigation.userId?.toString() === callerIdStr;
+    const isSquadMember = Boolean(
+      investigation.squadId &&
+      user.squadId &&
+      investigation.squadId.toString() === user.squadId.toString()
+    );
+    const isParticipant =
+      isOwner ||
+      isSquadMember ||
+      (Array.isArray(investigation.participatingUserIds) &&
+        investigation.participatingUserIds.some((p: any) => p.toString() === callerIdStr)) ||
+      user.role === "ADMIN" ||
+      user.role === "MODERATOR";
+
+    if (!isParticipant) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "FORBIDDEN",
+            message: "You are not authorized to solve clues for this investigation.",
+          },
+        },
+        { status: 403 }
       );
     }
 
@@ -193,51 +230,74 @@ export async function POST(
     }
 
     const totalCluesCount = await Clue.countDocuments({ questId: quest._id });
-    investigation.failedAttemptsCount = 0;
-    investigation.cooldownUntil = null;
+    const isLastStage = stageOrder >= totalCluesCount;
+    const nextStage = isLastStage ? totalCluesCount + 1 : stageOrder + 1;
+    const nextStatus = isLastStage ? "READY_FOR_RECOVERY" : "IN_PROGRESS";
+    const nextProgressPct = isLastStage ? 90 : Math.round((stageOrder / (totalCluesCount + 1)) * 100);
 
-    investigation.solvedClues.push({
-      clueId: clue._id as Types.ObjectId,
-      stageOrder,
-      solvedByUserId: user._id as Types.ObjectId,
-      solvedByName: user.displayName,
-      usedHint: false,
-      solvedAt: new Date(),
-    });
+    const updated = await Investigation.findOneAndUpdate(
+      {
+        _id: investigation._id,
+        currentStage: stageOrder, // Optimistic concurrency lock
+      },
+      {
+        $set: {
+          currentStage: nextStage,
+          progressPct: nextProgressPct,
+          status: nextStatus,
+          failedAttemptsCount: 0,
+          cooldownUntil: null,
+        },
+        $push: {
+          solvedClues: {
+            clueId: clue._id as Types.ObjectId,
+            stageOrder,
+            solvedByUserId: user._id as Types.ObjectId,
+            solvedByName: user.displayName,
+            usedHint: false,
+            solvedAt: new Date(),
+          },
+        },
+        $addToSet: { participatingUserIds: user._id },
+      },
+      { new: true }
+    );
 
-    if (
-      !investigation.participatingUserIds.some(
-        (id) => id.toString() === user._id.toString()
-      )
-    ) {
-      investigation.participatingUserIds.push(user._id as Types.ObjectId);
+    if (!updated) {
+      // Concurrently solved by a teammate
+      const latest = await Investigation.findById(investigation._id);
+      return NextResponse.json({
+        success: true,
+        data: {
+          alreadySolved: true,
+          stageSolved: stageOrder,
+          unlockedBreadcrumb: clue.unlockedBreadcrumbText,
+          explanation: explanationText,
+          nextStage: latest?.currentStage || (stageOrder + 1),
+          progressPct: latest?.progressPct || 90,
+          status: latest?.status || "IN_PROGRESS",
+          message: "This stage was just solved by your squad mate! Advancing...",
+        },
+      });
     }
-
-    const solvedCount = investigation.solvedClues.length;
-    if (solvedCount >= totalCluesCount) {
-      investigation.currentStage = totalCluesCount + 1;
-      investigation.progressPct = 90;
-      investigation.status = "READY_FOR_RECOVERY";
-    } else {
-      investigation.currentStage = stageOrder + 1;
-      investigation.progressPct = Math.round((solvedCount / (totalCluesCount + 1)) * 100);
-    }
-
-    await investigation.save();
 
     await User.findByIdAndUpdate(user._id, {
       $inc: { "stats.cluesSolved": 1 },
     });
 
-    if (investigation.isSquadInvestigation && investigation.squadId) {
-      for (const teammateId of investigation.participatingUserIds) {
+    await recordDailyQuestAction(user._id.toString(), "SOLVE_CLUE").catch((err) => {
+      console.error("[DailyQuest] Failed to record clue solve:", err);
+    });
+
+    if (updated.isSquadInvestigation && updated.squadId) {
+      for (const teammateId of updated.participatingUserIds) {
         if (teammateId.toString() !== user._id.toString()) {
           await Notification.create({
             userId: teammateId,
             category: "QUEST_SQUAD",
             title: `Clue #${stageOrder} Solved by ${user.displayName}!`,
             message: `${quest.questCode}: "${clue.unlockedBreadcrumbText}" is now unlocked on your Squad Board.`,
-            linkUrl: `/investigations/${investigation._id}`,
+            linkUrl: `/investigations/${updated._id}`,
           });
         }
       }
@@ -249,9 +309,9 @@ export async function POST(
         stageSolved: stageOrder,
         unlockedBreadcrumb: clue.unlockedBreadcrumbText,
         explanation: explanationText,
-        nextStage: investigation.currentStage,
-        progressPct: investigation.progressPct,
-        status: investigation.status,
+        nextStage: updated.currentStage,
+        progressPct: updated.progressPct,
+        status: updated.status,
       },
     });
   } catch (error: any) {

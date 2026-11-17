@@ -118,26 +118,44 @@ export async function GET(req: NextRequest) {
       return acc;
     }, {});
 
-    // User investigation state mapping (to distinguish completed vs available)
-    const userInvMap = new Map<string, any>();
+    // User investigation state mapping (strictly decoupled for solo vs squad)
+    const soloInvMap = new Map<string, any>();
+    const squadInvMap = new Map<string, any>();
     if (user) {
-      const userInvs = await Investigation.find({
-        questId: { $in: questIds },
-        $or: [
-          { userId: user._id },
-          ...(user.squadId ? [{ squadId: user.squadId }] : []),
-          { participatingUserIds: user._id },
-        ],
-      })
-        .select("questId status progressPct currentStage updatedAt")
-        .sort({ updatedAt: -1 })
-        .lean();
+      const [soloInvs, squadInvs] = await Promise.all([
+        Investigation.find({
+          questId: { $in: questIds },
+          userId: user._id,
+          isSquadInvestigation: false,
+        })
+          .select("questId status progressPct currentStage updatedAt")
+          .sort({ updatedAt: -1 })
+          .lean(),
+        user.squadId
+          ? Investigation.find({
+              questId: { $in: questIds },
+              squadId: user.squadId,
+              isSquadInvestigation: true,
+            })
+              .select("questId status progressPct currentStage updatedAt")
+              .sort({ updatedAt: -1 })
+              .lean()
+          : Promise.resolve([]),
+      ]);
 
-      for (const inv of userInvs) {
+      for (const inv of soloInvs) {
         const qid = inv.questId.toString();
-        const existing = userInvMap.get(qid);
+        const existing = soloInvMap.get(qid);
         if (!existing || inv.status === "COMPLETED") {
-          userInvMap.set(qid, inv);
+          soloInvMap.set(qid, inv);
+        }
+      }
+
+      for (const inv of squadInvs) {
+        const qid = inv.questId.toString();
+        const existing = squadInvMap.get(qid);
+        if (!existing || inv.status === "COMPLETED") {
+          squadInvMap.set(qid, inv);
         }
       }
     }
@@ -172,11 +190,37 @@ export async function GET(req: NextRequest) {
         totalStages: clueCountMap[q._id.toString()] || 0,
       };
 
-      const userInv = userInvMap.get(q._id.toString());
-      safeQuest.isCompletedByUser = userInv?.status === "COMPLETED";
-      safeQuest.userInvestigationStatus = userInv?.status || "NOT_STARTED";
-      safeQuest.userInvestigationId = userInv?._id?.toString() || null;
-      safeQuest.userProgressPct = userInv?.progressPct || 0;
+      const soloInv = soloInvMap.get(q._id.toString());
+      const squadInv = squadInvMap.get(q._id.toString());
+
+      let activeOrLatestInv = null;
+      if (
+        soloInv &&
+        ["IN_PROGRESS", "READY_FOR_RECOVERY", "SUBMITTED_FOR_VERIFICATION"].includes(soloInv.status)
+      ) {
+        activeOrLatestInv = soloInv;
+      } else if (
+        squadInv &&
+        ["IN_PROGRESS", "READY_FOR_RECOVERY", "SUBMITTED_FOR_VERIFICATION"].includes(squadInv.status)
+      ) {
+        activeOrLatestInv = squadInv;
+      } else if (soloInv) {
+        activeOrLatestInv = soloInv;
+      } else if (squadInv && squadInv.status === "COMPLETED") {
+        activeOrLatestInv = null;
+      }
+
+      safeQuest.isCompletedByUser = soloInv?.status === "COMPLETED";
+      safeQuest.isCompletedBySquad = squadInv?.status === "COMPLETED";
+      safeQuest.userInvestigationStatus = activeOrLatestInv?.status || (soloInv?.status) || "NOT_STARTED";
+      safeQuest.userInvestigationId = activeOrLatestInv?._id?.toString() || null;
+      safeQuest.userProgressPct = activeOrLatestInv?.progressPct || 0;
+      safeQuest.soloInvestigation = soloInv || null;
+      safeQuest.squadInvestigation = squadInv || null;
+      safeQuest.soloInvestigationStatus = soloInv?.status || "NOT_STARTED";
+      safeQuest.soloInvestigationId = soloInv?._id?.toString() || null;
+      safeQuest.squadInvestigationStatus = squadInv?.status || "NOT_STARTED";
+      safeQuest.squadInvestigationId = squadInv?._id?.toString() || null;
 
       // Sensitive operational fields only visible to staff
       if (isStaff) {

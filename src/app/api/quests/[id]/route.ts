@@ -26,24 +26,52 @@ export async function GET(
     }
 
     let userInvestigation: any = null;
+    let soloInvestigation: any = null;
+    let squadInvestigation: any = null;
+
     if (user) {
-      const userInvs = await Investigation.find({
+      soloInvestigation = await Investigation.findOne({
         questId: rawQuest._id,
-        $or: [
-          { userId: user._id },
-          ...(user.squadId ? [{ squadId: user.squadId }] : []),
-          { participatingUserIds: user._id },
-        ],
+        userId: user._id,
+        isSquadInvestigation: false,
       })
         .sort({ updatedAt: -1 })
         .lean();
 
-      userInvestigation = userInvs.find((i: any) => i.status === "COMPLETED") || userInvs[0] || null;
+      if (user.squadId) {
+        squadInvestigation = await Investigation.findOne({
+          questId: rawQuest._id,
+          squadId: user.squadId,
+          isSquadInvestigation: true,
+        })
+          .sort({ updatedAt: -1 })
+          .lean();
+      }
+
+      // Prioritize active solo room, then active squad room, then completed solo room
+      if (
+        soloInvestigation &&
+        ["IN_PROGRESS", "READY_FOR_RECOVERY", "SUBMITTED_FOR_VERIFICATION"].includes(soloInvestigation.status)
+      ) {
+        userInvestigation = soloInvestigation;
+      } else if (
+        squadInvestigation &&
+        ["IN_PROGRESS", "READY_FOR_RECOVERY", "SUBMITTED_FOR_VERIFICATION"].includes(squadInvestigation.status)
+      ) {
+        userInvestigation = squadInvestigation;
+      } else if (soloInvestigation) {
+        userInvestigation = soloInvestigation;
+      } else if (squadInvestigation && squadInvestigation.status === "COMPLETED") {
+        // Squad completed, but user has not started Solo Recon:
+        // Keep userInvestigation null so the UI presents the "Start Solo Recon" action!
+        userInvestigation = null;
+      }
     }
 
-    const isCompletedByUser = userInvestigation?.status === "COMPLETED";
+    const isCompletedByUser = soloInvestigation?.status === "COMPLETED";
+    const isCompletedBySquad = squadInvestigation?.status === "COMPLETED";
 
-    const canRevealLocation = isStaff || isCompletedByUser || (
+    const canRevealLocation = isStaff || isCompletedByUser || isCompletedBySquad || (
       userInvestigation &&
       userInvestigation.currentStage >= (rawQuest.unlockLocationAtStage || 3)
     );
@@ -64,9 +92,14 @@ export async function GET(
       status: rawQuest.status,
       createdAt: rawQuest.createdAt,
       isCompletedByUser,
-      userInvestigationStatus: userInvestigation?.status || "NOT_STARTED",
+      isCompletedBySquad,
+      userInvestigationStatus: userInvestigation?.status || (soloInvestigation?.status) || "NOT_STARTED",
       userInvestigationId: userInvestigation?._id?.toString() || null,
       userProgressPct: userInvestigation?.progressPct || 0,
+      soloInvestigationStatus: soloInvestigation?.status || "NOT_STARTED",
+      soloInvestigationId: soloInvestigation?._id?.toString() || null,
+      squadInvestigationStatus: squadInvestigation?.status || "NOT_STARTED",
+      squadInvestigationId: squadInvestigation?._id?.toString() || null,
     };
 
     if (rawQuest.targetLocationId) {
@@ -168,6 +201,8 @@ export async function GET(
         quest: safeQuest,
         clues: visibleClues,
         investigation: userInvestigation,
+        soloInvestigation,
+        squadInvestigation,
         isStaff,
         isAuthenticated: Boolean(user),
       },

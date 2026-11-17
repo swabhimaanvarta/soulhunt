@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   MessageSquare,
   Send,
@@ -62,7 +62,7 @@ export default function HandoverCoordinationChat({
 
   const isSafeDeskHeld = ["DEPOSITED_AT_SAFE_DESK", "SAFE_DESK"].includes(custodyStatus);
 
-  const scrollChatToBottom = (smooth = true) => {
+  const scrollChatToBottom = useCallback((smooth = true) => {
     if (messageListRef.current) {
       if (smooth) {
         messageListRef.current.scrollTo({
@@ -73,9 +73,9 @@ export default function HandoverCoordinationChat({
         messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
       }
     }
-  };
+  }, []);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     try {
       const res = await fetch(`/api/claims/${claimId}/messages`);
       const data = await res.json();
@@ -91,13 +91,13 @@ export default function HandoverCoordinationChat({
     } finally {
       setLoading(false);
     }
-  };
+  }, [claimId]);
 
   useEffect(() => {
     fetchMessages();
     const interval = setInterval(fetchMessages, 15000);
     return () => clearInterval(interval);
-  }, [claimId]);
+  }, [fetchMessages]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -111,7 +111,7 @@ export default function HandoverCoordinationChat({
       }
     }
     prevMessageCountRef.current = messages.length;
-  }, [messages]);
+  }, [messages, scrollChatToBottom]);
 
   const handleSendMessage = async (textToSend: string, isPreset = false, presetCode = "") => {
     if (!textToSend.trim()) return;

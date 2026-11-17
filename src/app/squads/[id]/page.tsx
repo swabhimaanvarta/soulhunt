@@ -93,7 +93,7 @@ export default function SquadDetailPage() {
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
 
-  const fetchCurrentUser = async () => {
+  const fetchCurrentUser = useCallback(async () => {
     try {
       const res = await fetch("/api/auth/me");
       if (res.ok) {
@@ -105,7 +105,7 @@ export default function SquadDetailPage() {
     } catch {
       // unauthenticated
     }
-  };
+  }, []);
 
   const fetchSquad = useCallback(async () => {
     try {
@@ -162,7 +162,7 @@ export default function SquadDetailPage() {
       fetchSquad();
       fetchCurrentUser();
     }
-  }, [id, fetchSquad]);
+  }, [id, fetchSquad, fetchCurrentUser]);
 
   useEffect(() => {
     if (viewerRole && canManageJoinRequests(viewerRole)) {

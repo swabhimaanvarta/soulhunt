@@ -65,30 +65,50 @@ export async function GET(req: NextRequest) {
       items = results.map((i: any) => ({ ...i, reportType: "FOUND" }));
       total = count;
     } else {
-      // Merged query
-      const [lost, found, lostCount, foundCount] = await Promise.all([
-        LostItem.find(baseFilter)
-          .sort({ createdAt: -1 })
-          .populate("reporterId", "displayName username email department")
-          .populate("lastKnownLocationId", "name code isSafeDesk")
-          .lean(),
-        FoundItem.find(baseFilter)
-          .sort({ createdAt: -1 })
-          .populate("finderId", "displayName username email department")
-          .populate("foundLocationId", "name code isSafeDesk")
-          .populate("safeDeskLocationId", "name code building")
-          .lean(),
+      // Merged query with database-level pagination
+      const [lostCount, foundCount] = await Promise.all([
         LostItem.countDocuments(baseFilter),
         FoundItem.countDocuments(baseFilter),
       ]);
-
-      const combined = [
-        ...lost.map((i: any) => ({ ...i, reportType: "LOST" })),
-        ...found.map((i: any) => ({ ...i, reportType: "FOUND" })),
-      ].sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
       total = lostCount + foundCount;
-      items = combined.slice(skip, skip + limit);
+
+      const pagedDocs = await LostItem.aggregate([
+        { $match: baseFilter },
+        { $addFields: { reportType: "LOST" } },
+        {
+          $unionWith: {
+            coll: FoundItem.collection.name,
+            pipeline: [
+              { $match: baseFilter },
+              { $addFields: { reportType: "FOUND" } },
+            ],
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: limit },
+      ]);
+
+      const lostSubset = pagedDocs.filter((i: any) => i.reportType === "LOST");
+      const foundSubset = pagedDocs.filter((i: any) => i.reportType === "FOUND");
+
+      await Promise.all([
+        lostSubset.length > 0
+          ? LostItem.populate(lostSubset, [
+              { path: "reporterId", select: "displayName username email department" },
+              { path: "lastKnownLocationId", select: "name code isSafeDesk" },
+            ])
+          : Promise.resolve(),
+        foundSubset.length > 0
+          ? FoundItem.populate(foundSubset, [
+              { path: "finderId", select: "displayName username email department" },
+              { path: "foundLocationId", select: "name code isSafeDesk" },
+              { path: "safeDeskLocationId", select: "name code building" },
+            ])
+          : Promise.resolve(),
+      ]);
+
+      items = pagedDocs;
     }
 
     return NextResponse.json({

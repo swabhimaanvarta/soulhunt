@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { ClaimRequest, LostItem, FoundItem, Notification } from "@/models";
+import { ClaimRequest, LostItem, FoundItem } from "@/models";
 import { apiSuccess, apiError, apiServerError } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
@@ -34,7 +34,6 @@ export async function GET(req: NextRequest) {
     await connectDB();
 
     const claims = await ClaimRequest.find(query)
-      .select("+handoverCode")
       .populate("claimantId", "displayName username avatarUrl")
       .populate("counterpartyUserId", "displayName username avatarUrl")
       .sort({ createdAt: -1 })
@@ -81,34 +80,6 @@ export async function GET(req: NextRequest) {
         const isClaimant = c.claimantId?._id?.toString() === user._id.toString();
         const isCounterparty = c.counterpartyUserId?._id?.toString() === user._id.toString();
 
-        // Secure handover PIN handling:
-        // Only claimant (or counterparty in LOST flow) with APPROVED status can receive active handoverCode
-        let activeHandoverCode: string | undefined = undefined;
-        const isPinRecipient =
-          (c.itemType === "FOUND" && isClaimant) || (c.itemType === "LOST" && isCounterparty);
-
-        if (c.status === "APPROVED" && isPinRecipient) {
-          if (c.handoverCode) {
-            activeHandoverCode = c.handoverCode;
-          } else {
-            // Fallback to notification retrieval if plaintext wasn't persisted in ClaimRequest
-            const notif = await Notification.findOne({
-              userId: user._id,
-              category: "CLAIM_UPDATE",
-              linkUrl: { $regex: c.itemId.toString() },
-              message: /PIN is (\d{6})/,
-            }).sort({ createdAt: -1 });
-
-            if (notif) {
-              const match = notif.message.match(/PIN is (\d{6})/);
-              if (match && match[1]) {
-                activeHandoverCode = match[1];
-                await ClaimRequest.findByIdAndUpdate(c._id, { handoverCode: activeHandoverCode });
-              }
-            }
-          }
-        }
-
         const safePhoto =
           itemDoc?.photoUrl ||
           itemDoc?.blurredPhotoUrl ||
@@ -131,7 +102,6 @@ export async function GET(req: NextRequest) {
           handoverLocked: Boolean(c.handoverLocked),
           lockoutUntil: c.lockoutUntil || null,
           handoverCodeExpiresAt: c.handoverCodeExpiresAt || null,
-          ...(activeHandoverCode ? { handoverCode: activeHandoverCode } : {}),
           item: itemDoc
             ? {
                 _id: itemDoc._id,
