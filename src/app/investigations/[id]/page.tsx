@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/auth";
 import InvestigationRoomClient from "@/components/InvestigationRoomClient";
 import { createPlayerClueVariants } from "@/lib/game/variants";
 
+export const dynamic = "force-dynamic";
+
 export default async function SquadInvestigationRoomPage({
   params,
 }: {

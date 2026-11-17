@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "db:index": "tsx src/scripts/db_init_indexes.ts",
+    "db:check": "tsx src/scripts/db_health_check.ts",
     "seed": "tsx src/scripts/seed.ts",
     "seed:admin": "tsx src/scripts/seed_admin.ts",
     "seed:items": "tsx src/scripts/seed_rich_items.ts",

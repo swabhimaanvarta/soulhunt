@@ -211,10 +211,12 @@ AIEM Hunt includes an automated verification and adversarial testing pipeline:
 | Command | Description |
 | :--- | :--- |
 | `npm run dev` | Starts local Next.js development server with hot-reloading |
-| `npm run build` | Compiles optimized Next.js 15 production build (all 74 routes) |
+| `npm run build` | Compiles optimized Next.js 15 production build (all 75 routes, standalone output) |
 | `npm run start` | Launches Next.js production server |
 | `npm run typecheck` | Executes `tsc --noEmit` across all App Router routes |
 | `npm run lint` | Runs Next.js ESLint validation |
+| `npm run db:index` | Synchronizes, verifies, and auto-heals all 114 indexes across 28 collections |
+| `npm run db:check` | Inspects database connection, engine version, wire latency, and active collections |
 | `npm test` | Safe test harness (bcrypt handover PIN, JWT, safe-desk custody) |
 | `npm run test:daily` | Daily quest rotation & Asia/Kolkata midnight rollover suite |
 | `npm run test:quests` | Course syllabus AI alignment & HMAC anti-cheat verification |
@@ -230,6 +232,23 @@ npx tsx src/scripts/test_kinetic_avatar_fx.ts        # Canvas particle shaders &
 npx tsx src/scripts/test_seasonal_leagues.ts         # Trimester calendar & soft reset math
 npx tsx src/scripts/test_community_events.ts         # Rush Hour & Syndicate Weekend windows
 npx tsx src/scripts/adversarial_challenger_pr4_comprehensive.ts # High-concurrency route blast
+```
+
+---
+
+## 7. Production Deployment & Database Administration
+
+For production deployment instructions on **Vercel**, **Docker / Docker Compose**, **MongoDB Atlas**, automated health monitoring via `/api/health`, and backup/disaster recovery scripts, refer to the full [Production Deployment Guide](file:///c:/Users/VishnuGawas07/Desktop/AIEM%20HUNT/aiem-hunt/docs/DEPLOYMENT.md).
+
+```bash
+# Production Containerized Deployment (Docker Compose)
+docker compose up -d --build
+
+# Pre-Deploy Database Index Synchronization
+npm run db:index
+
+# Real-Time Telemetry & Health Probe
+curl -f http://localhost:3000/api/health
 ```
 
 ---

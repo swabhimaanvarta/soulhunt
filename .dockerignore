@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.gitignore
+.env*.local
+storage/evidence/*
+src/screenshots
+*.log
+*.tsbuildinfo
+

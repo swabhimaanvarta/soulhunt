@@ -28,6 +28,8 @@ import { Quest, LostItem, FoundItem, CampusLocation, Squad, Event } from "@/mode
 import { sanitizeItemTitle } from "@/lib/item-dto";
 import { sanitizePublicDescription } from "@/lib/privacy";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   let quests: any[] = [];
   let lostItems: any[] = [];

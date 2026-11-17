@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  output: "standalone",
   serverExternalPackages: ["mongoose"],
   webpack: (config, { dev }) => {
     // In local development on Windows, use in-memory cache to prevent
