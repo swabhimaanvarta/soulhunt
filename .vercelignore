@@ -1,0 +1,9 @@
+.next
+node_modules
+.git
+.env*.local
+storage/evidence/*
+src/screenshots
+*.log
+*.tsbuildinfo
+
